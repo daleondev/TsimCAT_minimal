@@ -332,6 +332,15 @@ namespace backend
         }
 
         QJsonObject root;
+        QFile existingFile(path);
+        if (existingFile.exists() && existingFile.open(QIODevice::ReadOnly)) {
+            QJsonParseError parseError;
+            const auto existingDocument = QJsonDocument::fromJson(existingFile.readAll(), &parseError);
+            if (parseError.error == QJsonParseError::NoError && existingDocument.isObject()) {
+                root = existingDocument.object();
+            }
+        }
+
         root.insert(QStringLiteral("serverIp"), m_draftSettings.serverIp);
         root.insert(QStringLiteral("serverNetId"), m_draftSettings.serverNetId);
         root.insert(QStringLiteral("localNetId"), m_draftSettings.localNetId);

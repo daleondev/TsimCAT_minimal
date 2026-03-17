@@ -4,5 +4,21 @@
     "localNetId": "127.0.0.1.1.20",
     "adsPort": 851,
     "variableName": "",
-    "variableType": "int32"
+    "variableType": "int32",
+    "adsVariables": {
+        "rotaryTable": {
+            "actualPosition": {
+                "name": "MAIN.rotaryTable.ActualPosition",
+                "type": "double"
+            },
+            "sensor0": {
+                "name": "MAIN.rotaryTable.Sensor0",
+                "type": "bool"
+            },
+            "sensor180": {
+                "name": "MAIN.rotaryTable.Sensor180",
+                "type": "bool"
+            }
+        }
+    }
 }

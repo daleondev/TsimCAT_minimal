@@ -11,6 +11,9 @@ qt_add_qml_module(TsimCAT_UI
     QML_FILES
         Main.qml
         controls/NavigationSidebar.qml
+        controls/FenceModel.qml
+        controls/Plant3DView.qml
+        controls/RotaryTableModel.qml
         icons/DashboardIcon.qml
         icons/RobotIcon.qml
         icons/AdsIcon.qml

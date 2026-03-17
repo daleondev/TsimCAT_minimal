@@ -36,6 +36,12 @@ target_link_libraries(
     core::coroutines
 )
 
+target_include_directories(
+    core_link
+    PRIVATE
+    ${CMAKE_BINARY_DIR}/third_party/open62541
+)
+
 target_compile_definitions(
     core_link
     PUBLIC

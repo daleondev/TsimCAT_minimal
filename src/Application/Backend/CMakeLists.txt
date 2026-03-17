@@ -5,6 +5,9 @@ target_link_libraries(TsimCAT_Backend
     Qt6::Quick
     QCoro6::Core
     QCoro6::Quick
+
+    PRIVATE
+    core::link
 )
 
 target_compile_features(
@@ -19,6 +22,8 @@ qt_add_qml_module(TsimCAT_Backend
     RESOURCE_PREFIX "/qt/qml"
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/TsimCAT/Backend"
     SOURCES
+        AdsConfigBackend.h
+        AdsConfigBackend.cpp
         Backend.h
         Backend.cpp
 )

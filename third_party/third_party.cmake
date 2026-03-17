@@ -8,3 +8,24 @@ set(QCORO_WITH_QTWEBSOCKETS OFF CACHE BOOL "" FORCE)
 set(QCORO_WITH_QTNETWORK OFF CACHE BOOL "" FORCE)
 set(QCORO_WITH_QTDBUS OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/qcoro)
+
+# ADS
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/ADS/AdsLib)
+set_target_properties(ads PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ads")
+target_compile_definitions(ads PRIVATE CONFIG_DEFAULT_LOGLEVEL=1)
+
+# Open62541
+set(UA_ENABLE_AMALGAMATION ON CACHE BOOL "" FORCE)
+set(UA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(UA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(UA_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/open62541)
+
+# asio
+add_library(asio INTERFACE)
+add_library(asio::asio ALIAS asio)
+target_include_directories(
+    asio
+    INTERFACE
+    ${CMAKE_CURRENT_LIST_DIR}/asio/include
+)

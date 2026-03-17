@@ -1,8 +1,6 @@
 #include "AdsClient.hpp"
 #include "Coroutines/Context.hpp"
 
-#include "format_utils.hpp"
-
 #include <atomic>
 #include <cassert>
 #include <iostream>
@@ -129,14 +127,7 @@ namespace
       public:
         const char* name() const noexcept override { return "AdsError"; }
 
-        std::string message(int ev) const override
-        {
-            static constexpr auto enums{ fmtu::detail::underlying_enumerators<AdsError>() };
-            if (!std::ranges::contains(enums, static_cast<AdsErrorType>(ev))) {
-                return "Unknown";
-            }
-            return std::to_string(static_cast<AdsErrorType>(ev));
-        }
+        std::string message(int ev) const override { return std::to_string(static_cast<AdsErrorType>(ev)); }
     };
 
     const std::error_category& ads_category()

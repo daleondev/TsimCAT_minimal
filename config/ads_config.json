@@ -1,0 +1,8 @@
+{
+    "serverIp": "127.0.0.1",
+    "serverNetId": "127.0.0.1.1.1",
+    "localNetId": "127.0.0.1.1.20",
+    "adsPort": 851,
+    "variableName": "",
+    "variableType": "int32"
+}

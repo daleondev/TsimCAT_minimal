@@ -1,8 +1,6 @@
 #include "OpcUaClient.hpp"
 #include "Coroutines/Context.hpp"
 
-#include "format_utils.hpp"
-
 #include <algorithm>
 #include <iostream>
 #include <print>
@@ -337,16 +335,9 @@ namespace
     class UaStatusCategory : public std::error_category
     {
       public:
-        const char* name() const noexcept override { return "AdsError"; }
+        const char* name() const noexcept override { return "UaStatus"; }
 
-        std::string message(int ev) const override
-        {
-            static constexpr auto enums{ fmtu::detail::underlying_enumerators<UaStatus>() };
-            if (!std::ranges::contains(enums, static_cast<UaStatusType>(ev))) {
-                return "Unknown";
-            }
-            return std::to_string(static_cast<UaStatusType>(ev));
-        }
+        std::string message(int ev) const override { return std::to_string(static_cast<UaStatusType>(ev)); }
     };
 
     const std::error_category& ua_category()
@@ -480,7 +471,7 @@ namespace core::link::symbolic
             co_return std::unexpected(make_error_code(status));
         }
 
-        size_t bytesRead{ UA_calcSizeBinary(value.data, value.type) };
+        size_t bytesRead{ UA_calcSizeBinary(value.data, value.type, nullptr) };
         if (bytesRead > dest.size()) {
             UA_Variant_clear(&value);
             co_return std::unexpected(make_error_code(UaStatus::BadEncodingLimitsExceeded));
@@ -489,7 +480,7 @@ namespace core::link::symbolic
         UA_ByteString bytes;
         bytes.length = dest.size();
         bytes.data = reinterpret_cast<UA_Byte*>(dest.data());
-        status = getStatus(UA_encodeBinary(value.data, value.type, &bytes));
+        status = getStatus(UA_encodeBinary(value.data, value.type, &bytes, nullptr));
         UA_Variant_clear(&value);
 
         if (isBad(status)) {
@@ -753,14 +744,14 @@ namespace core::link::symbolic
         auto status = UA_Client_readValueAttribute(m_client.get(), nodeToNative(node.value()), &value);
 
         if (status == UA_STATUSCODE_GOOD) {
-            size_t size = UA_calcSizeBinary(value.data, value.type);
+            size_t size = UA_calcSizeBinary(value.data, value.type, nullptr);
             if (size > 0) {
                 UA_ByteString bytes;
                 bytes.length = size;
                 std::vector<std::byte> buffer(size);
                 bytes.data = reinterpret_cast<UA_Byte*>(buffer.data());
 
-                auto encodeStatus = UA_encodeBinary(value.data, value.type, &bytes);
+                auto encodeStatus = UA_encodeBinary(value.data, value.type, &bytes, nullptr);
                 if (encodeStatus == UA_STATUSCODE_GOOD) {
                     info.stream->stream.push(std::move(buffer));
                 }
@@ -797,14 +788,14 @@ namespace core::link::symbolic
             return;
 
         if (value && value->hasValue) {
-            size_t size = UA_calcSizeBinary(value->value.data, value->value.type);
+            size_t size = UA_calcSizeBinary(value->value.data, value->value.type, nullptr);
             if (size > 0) {
                 UA_ByteString bytes;
                 bytes.length = size;
                 std::vector<std::byte> buffer(size);
                 bytes.data = reinterpret_cast<UA_Byte*>(buffer.data());
 
-                auto status = UA_encodeBinary(value->value.data, value->value.type, &bytes);
+                auto status = UA_encodeBinary(value->value.data, value->value.type, &bytes, nullptr);
                 if (status == UA_STATUSCODE_GOOD) {
                     sub->stream.push(std::move(buffer));
                 }

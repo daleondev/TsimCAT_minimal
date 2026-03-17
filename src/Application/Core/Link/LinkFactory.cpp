@@ -1,8 +1,13 @@
 #include "LinkFactory.hpp"
 #include "Raw/TcpServer.hpp"
-#include "Symbolic/AdsClient.hpp"
 #include "Symbolic/LocalAdsLink.hpp"
 #include "Symbolic/OpcUaClient.hpp"
+
+#ifdef TSIMCAT_ADS_DRIVER_TCADSDLL
+#include "Symbolic/TcAdsDllClient.hpp"
+#else
+#include "Symbolic/AdsClient.hpp"
+#endif
 
 #include <system_error>
 
@@ -22,8 +27,13 @@ namespace core::link
                 if (config.inProcess) {
                     return std::make_unique<symbolic::LocalAdsLink>(config.instanceName);
                 }
+#ifdef TSIMCAT_ADS_DRIVER_TCADSDLL
+                return std::make_unique<symbolic::TcAdsDllClient>(
+                  config.remoteNetId, config.ip, config.port, config.localNetId);
+#else
                 return std::make_unique<symbolic::AdsClient>(
                   config.remoteNetId, config.ip, config.port, config.localNetId);
+#endif
             }
             if (proto == Protocol::OpcUa) {
                 return std::make_unique<symbolic::OpcUaClient>(config.ip);

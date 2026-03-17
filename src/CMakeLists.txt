@@ -56,3 +56,11 @@ add_custom_target(run_appTsimCAT
 file(GENERATE
     OUTPUT "${CMAKE_BINARY_DIR}/run_appTsimCAT_$<CONFIG>.ps1"
     CONTENT "Set-Location '$<TARGET_FILE_DIR:appTsimCAT>'\n$env:PATH='${_runtime_path}'\n$env:QT_PLUGIN_PATH='${_qt_plugins}'\n$env:QML2_IMPORT_PATH='${_qt_qml}'\n& '$<TARGET_FILE:appTsimCAT>'\n")
+
+if(TSIMCAT_ADS_RUNTIME_DLL)
+    add_custom_command(TARGET appTsimCAT POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${TSIMCAT_ADS_RUNTIME_DLL}"
+            "$<TARGET_FILE_DIR:appTsimCAT>/TcAdsDll.dll"
+    )
+endif()

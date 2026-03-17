@@ -111,6 +111,7 @@ function Enter-VisualStudioDevShell {
 # ── Paths ─────────────────────────────────────────────────────────────────
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $buildDir = Join-Path $projectRoot 'build\release'
+$buildCachePath = Join-Path $buildDir 'CMakeCache.txt'
 
 # Resolve OutputDir default here (not in param block) so $projectRoot is available
 if (-not $OutputDir) {
@@ -214,6 +215,22 @@ if (-not (Test-Path $exePath)) {
     throw "Executable not found at $exePath. Run without -SkipBuild first."
 }
 
+$adsDriver = 'AdsLib'
+if (Test-Path $buildCachePath) {
+    $adsDriverLine = Select-String -Path $buildCachePath -Pattern '^TSIMCAT_ADS_DRIVER:STRING=' -SimpleMatch:$false | Select-Object -First 1
+    if ($adsDriverLine) {
+        $adsDriver = ($adsDriverLine.Line -split '=', 2)[1]
+    }
+}
+
+$tcAdsDllSource = $null
+if ($adsDriver -eq 'TcAdsDll') {
+    $tcAdsDllSource = Join-Path $projectRoot 'third_party\TcAdsDll\x64\TcAdsDll.dll'
+    if (-not (Test-Path $tcAdsDllSource)) {
+        $tcAdsDllSource = Join-Path $projectRoot 'third_party\TcAdsDll\TcAdsDll.dll'
+    }
+}
+
 # ── Step 2: Prepare output directory ──────────────────────────────────────
 Write-Host "[2/5] Preparing output directory..." -ForegroundColor Yellow
 if (Test-Path $OutputDir) {
@@ -226,6 +243,10 @@ Write-Host "[3/5] Collecting dependencies..." -ForegroundColor Yellow
 
 # Copy the executable
 Copy-Item $exePath $OutputDir
+
+if ($tcAdsDllSource -and (Test-Path $tcAdsDllSource)) {
+    Copy-Item $tcAdsDllSource $OutputDir
+}
 
 # Walk DLL dependencies recursively using dumpbin
 $dumpbinExe = $null

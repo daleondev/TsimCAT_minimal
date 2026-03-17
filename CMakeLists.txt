@@ -4,6 +4,17 @@ project(TsimCAT
     LANGUAGES CXX
 )
 
+set(TSIMCAT_ADS_DRIVER "AdsLib" CACHE STRING "ADS driver implementation to build")
+set_property(CACHE TSIMCAT_ADS_DRIVER PROPERTY STRINGS AdsLib TcAdsDll)
+
+set(_tsimcat_supported_ads_drivers AdsLib TcAdsDll)
+list(FIND _tsimcat_supported_ads_drivers "${TSIMCAT_ADS_DRIVER}" _tsimcat_ads_driver_index)
+if(_tsimcat_ads_driver_index EQUAL -1)
+    message(FATAL_ERROR "Unsupported TSIMCAT_ADS_DRIVER='${TSIMCAT_ADS_DRIVER}'. Expected one of: ${_tsimcat_supported_ads_drivers}")
+endif()
+
+message(STATUS "TsimCAT ADS driver: ${TSIMCAT_ADS_DRIVER}")
+
 if(NOT WIN32 OR NOT MSVC)
 	message(FATAL_ERROR "TsimCAT is Windows only and requires MSVC toolchain.")
 endif()

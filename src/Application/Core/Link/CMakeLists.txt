@@ -1,12 +1,20 @@
 add_library(core_link)
 add_library(core::link ALIAS core_link)
 
+set(_ads_client_source Symbolic/AdsClient.cpp)
+set(_ads_driver_compile_definition TSIMCAT_ADS_DRIVER_ADSLIB=1)
+
+if(TSIMCAT_ADS_DRIVER STREQUAL "TcAdsDll")
+    set(_ads_client_source Symbolic/TcAdsDllClient.cpp)
+    set(_ads_driver_compile_definition TSIMCAT_ADS_DRIVER_TCADSDLL=1)
+endif()
+
 target_sources(
     core_link
     PRIVATE
     LinkFactory.cpp
     Raw/TcpServer.cpp
-    Symbolic/AdsClient.cpp
+    ${_ads_client_source}
     Symbolic/LocalAdsLink.cpp
     Symbolic/OpcUaClient.cpp
 
@@ -26,7 +34,7 @@ target_link_libraries(
     core_link
     PRIVATE
     asio::asio
-    ads::ads
+    ads::driver
     open62541::open62541
     ws2_32
     mswsock
@@ -46,6 +54,9 @@ target_compile_definitions(
     core_link
     PUBLIC
     ASIO_STANDALONE
+
+    PRIVATE
+    ${_ads_driver_compile_definition}
 )
 
 target_compile_features(

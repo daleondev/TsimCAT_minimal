@@ -16,7 +16,8 @@
                 "CMAKE_CXX_COMPILER": "cl.exe",
                 "VCPKG_TARGET_TRIPLET": "x64-windows",
                 "X_VCPKG_APPLOCAL_DEPS_INSTALL": "OFF",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "TSIMCAT_ADS_DRIVER": "TcAdsDll"
             }
         },
         {

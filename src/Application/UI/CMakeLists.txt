@@ -10,6 +10,13 @@ qt_add_qml_module(TsimCAT_UI
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/TsimCAT/UI"
     QML_FILES
         Main.qml
+        controls/NavigationSidebar.qml
+        icons/DashboardIcon.qml
+        icons/RobotIcon.qml
+        icons/AdsIcon.qml
+        subscreens/PlantOverview.qml
+        subscreens/RobotStatus.qml
+        subscreens/AdsConfig.qml
     RESOURCES
         qtquickcontrols2.conf
 )

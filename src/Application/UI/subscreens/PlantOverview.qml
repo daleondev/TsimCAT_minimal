@@ -12,7 +12,7 @@ Control {
             id: plantView
             anchors.fill: parent
             backend: root.backend
-            exitDamperOpen: root.backend ? root.backend.exitConveyor.damperOpen : false
+            exitDamperOpen: root.backend && root.backend.exitConveyor ? root.backend.exitConveyor.damperOpen : false
         }
     }
 }

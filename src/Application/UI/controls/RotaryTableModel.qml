@@ -8,10 +8,8 @@ Node {
     property real radius: 480
     property real height: 760
     property real angleDegrees: 0
-    property bool partPresent: false
-    property bool busy: false
-    property bool readyToPick: false
-    property bool atLoadPosition: false
+    property bool sensor0Active: false
+    property bool sensor180Active: false
 
     readonly property real platterScale: rotaryRoot.radius / 50
     readonly property real innerPlatterScale: rotaryRoot.platterScale * 0.8
@@ -118,7 +116,7 @@ Node {
         scale: Qt.vector3d(0.2, 0.2, 0.2)
         materials: [
             DefaultMaterial {
-                diffuseColor: rotaryRoot.partPresent ? "#e74c3c" : "#2ecc71"
+                diffuseColor: rotaryRoot.sensor0Active ? "#e74c3c" : "#2ecc71"
                 emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
             }
         ]
@@ -131,7 +129,7 @@ Node {
         scale: Qt.vector3d(0.2, 0.2, 0.2)
         materials: [
             DefaultMaterial {
-                diffuseColor: rotaryRoot.readyToPick ? "#e74c3c" : "#2ecc71"
+                diffuseColor: rotaryRoot.sensor180Active ? "#e74c3c" : "#2ecc71"
                 emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
             }
         ]

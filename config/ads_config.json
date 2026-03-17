@@ -19,6 +19,28 @@
                 "name": "MAIN.rotaryTable.Sensor180",
                 "type": "bool"
             }
+        },
+        "conveyor": {
+            "run": {
+                "name": "MAIN.conveyor.Run",
+                "type": "bool"
+            },
+            "sensor1": {
+                "name": "MAIN.conveyor.Sensor0",
+                "type": "bool"
+            },
+            "sensor2": {
+                "name": "MAIN.conveyor.Sensor1",
+                "type": "bool"
+            },
+            "sensor3": {
+                "name": "MAIN.conveyor.Sensor2",
+                "type": "bool"
+            },
+            "sensor4": {
+                "name": "MAIN.conveyor.Sensor3",
+                "type": "bool"
+            }
         }
     }
 }

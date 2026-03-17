@@ -19,18 +19,6 @@ Item {
             antialiasingQuality: SceneEnvironment.High
         }
 
-        // Screenshot capture: listen for capturePending flag from backend
-        Connections {
-            target: root.backend ? root.backend.screenshotProvider : null
-            function onCapturePendingChanged() {
-                if (root.backend && root.backend.screenshotProvider && root.backend.screenshotProvider.capturePending) {
-                    view.grabToImage(function(result) {
-                        root.backend.screenshotProvider.onFrameCaptured(result.image);
-                    });
-                }
-            }
-        }
-
         Node {
             id: cameraPivot
             eulerRotation: Qt.vector3d(-26, 34, 0)
@@ -112,12 +100,24 @@ Item {
         }
 
         Node {
-            id: rotaryStation
+            id: table
             position: Qt.vector3d(-1350, 0, 120)
 
             RotaryTableModel {
                 angleDegrees: root.backend ? root.backend.rotaryTable.angleDegrees : 0
+                sensor0Active: root.backend ? root.backend.rotaryTable.sensor0Active : false
+                sensor180Active: root.backend ? root.backend.rotaryTable.sensor180Active : false
             }
+        }
+
+        ConveyorModel {
+            id: conveyor
+            position: Qt.vector3d(1640, 0, 120)
+            length: 1250
+            height: 720
+            width: 430
+            running: root.backend ? root.backend.conveyor.running : false
+            sensors: root.backend ? root.backend.conveyor.sensors : [false, false, false, false]
         }
     }
 

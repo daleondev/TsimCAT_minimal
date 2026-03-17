@@ -24,6 +24,8 @@ qt_add_qml_module(TsimCAT_Backend
     SOURCES
         AdsConfigBackend.h
         AdsConfigBackend.cpp
+        ConveyorBackend.h
+        ConveyorBackend.cpp
         RotaryTableBackend.h
         RotaryTableBackend.cpp
         Backend.h

@@ -11,6 +11,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <algorithm>
+
 namespace
 {
     template<typename T>
@@ -22,27 +24,65 @@ namespace
 
 namespace backend
 {
+    namespace
+    {
+        struct VariableConfig
+        {
+            QString name;
+            QString type;
+
+            auto isConfigured() const -> bool { return !name.trimmed().isEmpty(); }
+            auto hasType(QStringView expectedType) const -> bool
+            {
+                return type.trimmed().compare(expectedType, Qt::CaseInsensitive) == 0;
+            }
+        };
+
+        auto readVariableConfig(const QJsonObject& object, QStringView key, QStringView defaultType)
+          -> VariableConfig
+        {
+            const auto value = object.value(key.toString()).toObject();
+            return VariableConfig{ .name = value.value(QStringLiteral("name")).toString(),
+                                   .type =
+                                     value.value(QStringLiteral("type")).toString(defaultType.toString()) };
+        }
+    }
+
     struct Backend::SharedAdsConfig
     {
         QString serverIp{ QStringLiteral("127.0.0.1") };
         QString serverNetId{ QStringLiteral("127.0.0.1.1.1") };
         QString localNetId{ QStringLiteral("127.0.0.1.1.20") };
         int adsPort{ 851 };
-        QString rotaryActualPositionName;
-        QString rotaryActualPositionType{ QStringLiteral("double") };
+        VariableConfig rotaryActualPosition;
+        VariableConfig rotarySensor0;
+        VariableConfig rotarySensor180;
+        VariableConfig conveyorRun;
+        std::array<VariableConfig, 4> conveyorSensors;
     };
 
     Backend::Backend(QObject* parent)
       : QObject(parent)
       , m_adsConfig(new AdsConfigBackend(this))
+      , m_conveyor(new ConveyorBackend(this))
       , m_rotaryTable(new RotaryTableBackend(this))
     {
         launchTask(initializeSharedAdsLinkAsync());
     }
 
-    Backend::~Backend() = default;
+    Backend::~Backend()
+    {
+        if (m_rotaryTable) {
+            m_rotaryTable->detachSymbolicLink();
+        }
+        if (m_conveyor) {
+            m_conveyor->detachSymbolicLink();
+        }
+    }
 
     auto Backend::adsConfig() const -> AdsConfigBackend* { return m_adsConfig; }
+
+    auto Backend::conveyor() const -> ConveyorBackend* { return m_conveyor; }
 
     auto Backend::rotaryTable() const -> RotaryTableBackend* { return m_rotaryTable; }
 
@@ -93,10 +133,21 @@ namespace backend
 
         const auto adsVariables = root.value(QStringLiteral("adsVariables")).toObject();
         const auto rotaryTable = adsVariables.value(QStringLiteral("rotaryTable")).toObject();
-        const auto actualPosition = rotaryTable.value(QStringLiteral("actualPosition")).toObject();
-        config.rotaryActualPositionName = actualPosition.value(QStringLiteral("name")).toString();
-        config.rotaryActualPositionType =
-          actualPosition.value(QStringLiteral("type")).toString(config.rotaryActualPositionType);
+        const auto conveyor = adsVariables.value(QStringLiteral("conveyor")).toObject();
+
+        config.rotaryActualPosition =
+          readVariableConfig(rotaryTable, QStringLiteral("actualPosition"), QStringLiteral("double"));
+        config.rotarySensor0 =
+          readVariableConfig(rotaryTable, QStringLiteral("sensor0"), QStringLiteral("bool"));
+        config.rotarySensor180 =
+          readVariableConfig(rotaryTable, QStringLiteral("sensor180"), QStringLiteral("bool"));
+        config.conveyorRun = readVariableConfig(conveyor, QStringLiteral("run"), QStringLiteral("bool"));
+        config.conveyorSensors = {
+            readVariableConfig(conveyor, QStringLiteral("sensor1"), QStringLiteral("bool")),
+            readVariableConfig(conveyor, QStringLiteral("sensor2"), QStringLiteral("bool")),
+            readVariableConfig(conveyor, QStringLiteral("sensor3"), QStringLiteral("bool")),
+            readVariableConfig(conveyor, QStringLiteral("sensor4"), QStringLiteral("bool"))
+        };
 
         return config;
     }
@@ -104,11 +155,22 @@ namespace backend
     auto Backend::initializeSharedAdsLinkAsync() -> QCoro::Task<void>
     {
         const auto config = loadSharedAdsConfig();
-        if (config.rotaryActualPositionName.trimmed().isEmpty()) {
+
+        const auto hasConfiguredVariables =
+          config.rotaryActualPosition.isConfigured() || config.rotarySensor0.isConfigured() ||
+          config.rotarySensor180.isConfigured() || config.conveyorRun.isConfigured() ||
+          std::ranges::any_of(config.conveyorSensors,
+                              [](const auto& variable) { return variable.isConfigured(); });
+        if (!hasConfiguredVariables) {
             co_return;
         }
 
-        if (config.rotaryActualPositionType.compare(QStringLiteral("double"), Qt::CaseInsensitive) != 0) {
+        if (config.rotaryActualPosition.isConfigured() &&
+            !config.rotaryActualPosition.hasType(QStringLiteral("double"))) {
+            co_return;
+        }
+
+        if (config.conveyorRun.isConfigured() && !config.conveyorRun.hasType(QStringLiteral("bool"))) {
             co_return;
         }
 
@@ -138,6 +200,23 @@ namespace backend
 
         m_sharedAdsSymbolicLink = symbolicLink;
         m_sharedAdsLink = std::move(link);
-        m_rotaryTable->subscribeActualPosition(m_sharedAdsSymbolicLink, config.rotaryActualPositionName);
+
+        m_rotaryTable->configureSensorVariables(
+          m_sharedAdsSymbolicLink, config.rotarySensor0.name, config.rotarySensor180.name);
+        m_conveyor->configureSensorVariables(m_sharedAdsSymbolicLink,
+                                             { config.conveyorSensors[0].name,
+                                               config.conveyorSensors[1].name,
+                                               config.conveyorSensors[2].name,
+                                               config.conveyorSensors[3].name });
+
+        if (config.rotaryActualPosition.isConfigured()) {
+            m_rotaryTable->subscribeActualPosition(m_sharedAdsSymbolicLink, config.rotaryActualPosition.name);
+        }
+
+        if (config.conveyorRun.isConfigured()) {
+            m_conveyor->subscribeRun(m_sharedAdsSymbolicLink, config.conveyorRun.name);
+        }
+
+        co_return;
     }
 }

@@ -22,6 +22,28 @@
                 "reveal": "always"
             },
             "group": "build"
+        },
+        {
+            "label": "Deploy",
+            "command": "scripts/deploy.ps1",
+            "type": "shell",
+            "args": [],
+            "problemMatcher": [],
+            "options": {
+                "shell": {
+                    "executable": "powershell.exe",
+                    "args": [
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command"
+                    ]
+                }
+            },
+            "presentation": {
+                "reveal": "always"
+            },
+            "group": "build"
         }
     ]
 }

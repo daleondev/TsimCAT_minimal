@@ -1,3 +1,12 @@
 [submodule "third_party/qcoro"]
 	path = third_party/qcoro
 	url = https://github.com/qcoro/qcoro.git
+[submodule "third_party/asio"]
+	path = third_party/asio
+	url = https://github.com/chriskohlhoff/asio.git
+[submodule "third_party/ads"]
+	path = third_party/ads
+	url = https://github.com/Beckhoff/ADS.git
+[submodule "third_party/open62541"]
+	path = third_party/open62541
+	url = https://github.com/open62541/open62541.git

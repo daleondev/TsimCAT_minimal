@@ -8,37 +8,37 @@
     "adsVariables": {
         "rotaryTable": {
             "actualPosition": {
-                "name": "MAIN.rotaryTable.ActualPosition",
+                "name": "Table Motor (AX8108-0000-0105).Ch A.Ch A Interpolator Outputs",
                 "type": "double"
             },
             "sensor0": {
-                "name": "MAIN.rotaryTable.Sensor0",
+                "name": "8 Dig In (EL1008).Channel 1",
                 "type": "bool"
             },
             "sensor180": {
-                "name": "MAIN.rotaryTable.Sensor180",
+                "name": "8 Dig In (EL1008).Channel 2",
                 "type": "bool"
             }
         },
         "conveyor": {
             "run": {
-                "name": "MAIN.conveyor.Run",
+                "name": "8 Dig Out (EL2008).Channel 1",
                 "type": "bool"
             },
             "sensor1": {
-                "name": "MAIN.conveyor.Sensor0",
+                "name": "8 Dig In (EL1008).Channel 3",
                 "type": "bool"
             },
             "sensor2": {
-                "name": "MAIN.conveyor.Sensor1",
+                "name": "8 Dig In (EL1008).Channel 4",
                 "type": "bool"
             },
             "sensor3": {
-                "name": "MAIN.conveyor.Sensor2",
+                "name": "8 Dig In (EL1008).Channel 5",
                 "type": "bool"
             },
             "sensor4": {
-                "name": "MAIN.conveyor.Sensor3",
+                "name": "8 Dig In (EL1008).Channel 6",
                 "type": "bool"
             }
         }

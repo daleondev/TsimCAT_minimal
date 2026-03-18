@@ -27,6 +27,12 @@ namespace backend
         Q_PROPERTY(bool sensor180Active READ sensor180Active NOTIFY sensor180ActiveChanged)
 
       public:
+        enum class ActualPositionType
+        {
+            Float,
+            Double
+        };
+
         explicit RotaryTableBackend(QObject* parent = nullptr);
         ~RotaryTableBackend() override;
 
@@ -35,7 +41,9 @@ namespace backend
         auto sensor180Active() const -> bool;
 
         void detachSymbolicLink();
-        void subscribeActualPosition(core::link::ISymbolicLink* symbolicLink, const QString& variableName);
+        void subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
+                                     const QString& variableName,
+                                     ActualPositionType variableType);
         void configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                       const QString& sensor0VariableName,
                                       const QString& sensor180VariableName);
@@ -48,20 +56,17 @@ namespace backend
       private:
         void launchTask(QCoro::Task<void>&& task);
         void setAngleDegrees(double value);
-        void setSensor0Active(bool value);
-        void setSensor180Active(bool value);
-        void syncDerivedSensors(double angleDegrees);
-        auto subscribeActualPositionAsync(QString variableName) -> QCoro::Task<void>;
-        auto consumeActualPositionAsync() -> QCoro::Task<void>;
-        auto writeBoolAsync(QString variableName, bool value) -> QCoro::Task<void>;
+        auto subscribeActualPositionAsync(QString variableName, ActualPositionType variableType)
+          -> QCoro::Task<void>;
+        auto consumeActualPositionFloatAsync() -> QCoro::Task<void>;
+        auto consumeActualPositionDoubleAsync() -> QCoro::Task<void>;
 
         double m_angleDegrees{ 0.0 };
         bool m_sensor0Active{ false };
         bool m_sensor180Active{ false };
-        bool m_hasAngleReading{ false };
-        QString m_sensor0VariableName;
-        QString m_sensor180VariableName;
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
-        core::link::Subscription<double> m_actualPositionSubscription;
+        ActualPositionType m_actualPositionType{ ActualPositionType::Double };
+        core::link::Subscription<float> m_actualPositionFloatSubscription;
+        core::link::Subscription<double> m_actualPositionDoubleSubscription;
     };
 }

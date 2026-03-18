@@ -64,6 +64,7 @@ namespace core::link::symbolic
       , m_requestedLocalNetId(localNetId)
       , m_driverId(s_nextDriverId++)
     {
+        std::cout << "PORT: " << m_remoteAddress.port << std::endl;
         std::scoped_lock lock(s_registryMutex);
         s_registry[m_driverId] = this;
     }
@@ -103,14 +104,13 @@ namespace core::link::symbolic
             co_return std::unexpected(make_error_code(localAddressStatus));
         }
 
-        AdsVersion version{};
-        char deviceName[ADS_FIXEDNAMESIZE + 1]{};
-        auto deviceInfoStatus =
-          AdsSyncReadDeviceInfoReqEx(m_portHandle, &m_remoteAddress, deviceName, &version);
-        if (deviceInfoStatus != ADSERR_NOERR) {
+        uint16_t adsState = 0;
+        uint16_t deviceState = 0;
+        auto readStateStatus = AdsSyncReadStateReqEx(m_portHandle, &m_remoteAddress, &adsState, &deviceState);
+        if (readStateStatus != ADSERR_NOERR) {
             (void)AdsPortCloseEx(m_portHandle);
             m_portHandle = 0;
-            co_return std::unexpected(make_error_code(deviceInfoStatus));
+            co_return std::unexpected(make_error_code(readStateStatus));
         }
 
         co_return result::success();
@@ -257,7 +257,7 @@ namespace core::link::symbolic
             if (const auto it = m_subscriptionContexts.find(pNotification->hNotification);
                 it != m_subscriptionContexts.end()) {
                 stream = it->second.stream;
-                const auto* dataPtr = reinterpret_cast<const std::byte*>(pNotification + 1);
+                const auto* dataPtr = reinterpret_cast<const std::byte*>(pNotification->data);
                 data.assign(dataPtr, dataPtr + pNotification->cbSampleSize);
             }
         }

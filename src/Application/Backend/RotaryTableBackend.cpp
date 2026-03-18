@@ -2,26 +2,21 @@
 
 #include "Link/Symbolic/ISymbolicLink.hpp"
 
-#include <cmath>
+#include <iostream>
 #include <utility>
 
 namespace
 {
-    constexpr double kSensorToleranceDegrees = 1.0;
-
-    auto normalizeAngleDegrees(double angleDegrees) -> double
+    auto parseActualPositionType(backend::RotaryTableBackend::ActualPositionType type) -> const char*
     {
-        auto normalized = std::fmod(angleDegrees, 360.0);
-        if (normalized < 0.0) {
-            normalized += 360.0;
+        switch (type) {
+            case backend::RotaryTableBackend::ActualPositionType::Float:
+                return "float";
+            case backend::RotaryTableBackend::ActualPositionType::Double:
+                return "double";
         }
-        return normalized;
-    }
 
-    auto isAngleNear(double angleDegrees, double targetDegrees) -> bool
-    {
-        const auto delta = std::abs(normalizeAngleDegrees(angleDegrees) - targetDegrees);
-        return std::min(delta, 360.0 - delta) <= kSensorToleranceDegrees;
+        return "unknown";
     }
 
     template<typename T>
@@ -48,41 +43,41 @@ namespace backend
 
     void RotaryTableBackend::detachSymbolicLink()
     {
-        if (m_symbolicLink && m_actualPositionSubscription.isValid()) {
-            m_symbolicLink->unsubscribeRawSync(m_actualPositionSubscription.id());
+        if (m_symbolicLink && m_actualPositionFloatSubscription.isValid()) {
+            m_symbolicLink->unsubscribeRawSync(m_actualPositionFloatSubscription.id());
         }
 
-        m_actualPositionSubscription = {};
+        if (m_symbolicLink && m_actualPositionDoubleSubscription.isValid()) {
+            m_symbolicLink->unsubscribeRawSync(m_actualPositionDoubleSubscription.id());
+        }
+
+        m_actualPositionFloatSubscription = {};
+        m_actualPositionDoubleSubscription = {};
         m_symbolicLink = nullptr;
     }
 
     void RotaryTableBackend::subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
-                                                     const QString& variableName)
+                                                     const QString& variableName,
+                                                     ActualPositionType variableType)
     {
         detachSymbolicLink();
         m_symbolicLink = symbolicLink;
+        m_actualPositionType = variableType;
 
         if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
             return;
         }
 
-        launchTask(subscribeActualPositionAsync(variableName));
+        launchTask(subscribeActualPositionAsync(variableName, variableType));
     }
 
     void RotaryTableBackend::configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                                       const QString& sensor0VariableName,
                                                       const QString& sensor180VariableName)
     {
-        if (symbolicLink) {
-            m_symbolicLink = symbolicLink;
-        }
-
-        m_sensor0VariableName = sensor0VariableName;
-        m_sensor180VariableName = sensor180VariableName;
-
-        if (m_hasAngleReading) {
-            syncDerivedSensors(m_angleDegrees);
-        }
+        Q_UNUSED(symbolicLink);
+        Q_UNUSED(sensor0VariableName);
+        Q_UNUSED(sensor180VariableName);
     }
 
     void RotaryTableBackend::launchTask(QCoro::Task<void>&& task)
@@ -95,87 +90,76 @@ namespace backend
     {
         const auto angleChanged = !qFuzzyCompare(m_angleDegrees, value);
 
-        m_hasAngleReading = true;
-        syncDerivedSensors(value);
-
         if (angleChanged) {
             m_angleDegrees = value;
             emit angleDegreesChanged();
         }
     }
 
-    void RotaryTableBackend::setSensor0Active(bool value)
-    {
-        if (m_sensor0Active == value) {
-            return;
-        }
-
-        m_sensor0Active = value;
-        emit sensor0ActiveChanged();
-
-        if (m_symbolicLink && !m_sensor0VariableName.trimmed().isEmpty()) {
-            launchTask(writeBoolAsync(m_sensor0VariableName, value));
-        }
-    }
-
-    void RotaryTableBackend::setSensor180Active(bool value)
-    {
-        if (m_sensor180Active == value) {
-            return;
-        }
-
-        m_sensor180Active = value;
-        emit sensor180ActiveChanged();
-
-        if (m_symbolicLink && !m_sensor180VariableName.trimmed().isEmpty()) {
-            launchTask(writeBoolAsync(m_sensor180VariableName, value));
-        }
-    }
-
-    void RotaryTableBackend::syncDerivedSensors(double angleDegrees)
-    {
-        setSensor0Active(isAngleNear(angleDegrees, 0.0));
-        setSensor180Active(isAngleNear(angleDegrees, 180.0));
-    }
-
-    auto RotaryTableBackend::subscribeActualPositionAsync(QString variableName) -> QCoro::Task<void>
+    auto RotaryTableBackend::subscribeActualPositionAsync(QString variableName,
+                                                          ActualPositionType variableType)
+      -> QCoro::Task<void>
     {
         if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
             co_return;
         }
 
-        auto subscriptionResult =
-          co_await toQCoroTask(m_symbolicLink->subscribe<double>(variableName.toStdString()));
-        if (!subscriptionResult) {
-            co_return;
-        }
+        switch (variableType) {
+            case ActualPositionType::Float: {
+                auto subscriptionResult =
+                  co_await toQCoroTask(m_symbolicLink->subscribe<float>(variableName.toStdString()));
+                if (!subscriptionResult) {
+                    co_return;
+                }
 
-        m_actualPositionSubscription = std::move(subscriptionResult).value();
-        launchTask(consumeActualPositionAsync());
-    }
-
-    auto RotaryTableBackend::consumeActualPositionAsync() -> QCoro::Task<void>
-    {
-        while (m_actualPositionSubscription.isValid()) {
-            auto nextValue = co_await toQCoroTask(m_actualPositionSubscription.stream.next());
-            if (!nextValue.has_value()) {
+                m_actualPositionFloatSubscription = std::move(subscriptionResult).value();
+                launchTask(consumeActualPositionFloatAsync());
                 break;
             }
+            case ActualPositionType::Double: {
+                auto subscriptionResult =
+                  co_await toQCoroTask(m_symbolicLink->subscribe<double>(variableName.toStdString()));
+                if (!subscriptionResult) {
+                    co_return;
+                }
 
-            setAngleDegrees(nextValue.value());
+                m_actualPositionDoubleSubscription = std::move(subscriptionResult).value();
+                launchTask(consumeActualPositionDoubleAsync());
+                break;
+            }
         }
 
         co_return;
     }
 
-    auto RotaryTableBackend::writeBoolAsync(QString variableName, bool value) -> QCoro::Task<void>
+    auto RotaryTableBackend::consumeActualPositionFloatAsync() -> QCoro::Task<void>
     {
-        if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
-            co_return;
+        while (m_actualPositionFloatSubscription.isValid()) {
+            auto nextValue = co_await toQCoroTask(m_actualPositionFloatSubscription.stream.next());
+            if (!nextValue.has_value()) {
+                break;
+            }
+
+            std::cout << "Received angle (" << parseActualPositionType(ActualPositionType::Float)
+                      << "): " << nextValue.value() << std::endl;
+            setAngleDegrees(static_cast<double>(nextValue.value()));
         }
 
-        auto writeResult = co_await toQCoroTask(m_symbolicLink->write(variableName.toStdString(), value));
-        (void)writeResult;
+        co_return;
+    }
+
+    auto RotaryTableBackend::consumeActualPositionDoubleAsync() -> QCoro::Task<void>
+    {
+        while (m_actualPositionDoubleSubscription.isValid()) {
+            auto nextValue = co_await toQCoroTask(m_actualPositionDoubleSubscription.stream.next());
+            if (!nextValue.has_value()) {
+                break;
+            }
+
+            std::cout << "Received angle (" << parseActualPositionType(ActualPositionType::Double)
+                      << "): " << nextValue.value() << std::endl;
+            setAngleDegrees(nextValue.value());
+        }
 
         co_return;
     }

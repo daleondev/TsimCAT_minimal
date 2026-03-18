@@ -409,6 +409,15 @@ $qmlCount = (Get-ChildItem "$OutputDir\qml" -Recurse -Filter "*.dll" -ErrorActio
 $rootDllCount = (Get-ChildItem "$OutputDir\*.dll").Count
 Write-Host "      $pluginCount plugin DLLs, $qmlCount QML module DLLs, $rootDllCount root DLLs" -ForegroundColor Green
 
+# Strip debug symbols from the distributable bundle.
+$pdbFiles = Get-ChildItem $OutputDir -Recurse -Filter "*.pdb" -ErrorAction SilentlyContinue
+if ($pdbFiles.Count -gt 0) {
+    foreach ($pdb in $pdbFiles) {
+        Remove-Item $pdb.FullName -Force
+    }
+    Write-Host "      Removed $($pdbFiles.Count) PDB files from bundle" -ForegroundColor Green
+}
+
 # ── Step 5: Config & launcher ─────────────────────────────────────────────
 Write-Host "[5/5] Creating config & launcher..." -ForegroundColor Yellow
 

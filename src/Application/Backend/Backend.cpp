@@ -36,6 +36,11 @@ namespace backend
             {
                 return type.trimmed().compare(expectedType, Qt::CaseInsensitive) == 0;
             }
+
+            auto isFloatLike() const -> bool
+            {
+                return hasType(QStringLiteral("float")) || hasType(QStringLiteral("double"));
+            }
         };
 
         auto readVariableConfig(const QJsonObject& object, QStringView key, QStringView defaultType)
@@ -165,8 +170,7 @@ namespace backend
             co_return;
         }
 
-        if (config.rotaryActualPosition.isConfigured() &&
-            !config.rotaryActualPosition.hasType(QStringLiteral("double"))) {
+        if (config.rotaryActualPosition.isConfigured() && !config.rotaryActualPosition.isFloatLike()) {
             co_return;
         }
 
@@ -210,7 +214,11 @@ namespace backend
                                                config.conveyorSensors[3].name });
 
         if (config.rotaryActualPosition.isConfigured()) {
-            m_rotaryTable->subscribeActualPosition(m_sharedAdsSymbolicLink, config.rotaryActualPosition.name);
+            const auto actualPositionType = config.rotaryActualPosition.hasType(QStringLiteral("float"))
+                                              ? RotaryTableBackend::ActualPositionType::Float
+                                              : RotaryTableBackend::ActualPositionType::Double;
+            m_rotaryTable->subscribeActualPosition(
+              m_sharedAdsSymbolicLink, config.rotaryActualPosition.name, actualPositionType);
         }
 
         if (config.conveyorRun.isConfigured()) {

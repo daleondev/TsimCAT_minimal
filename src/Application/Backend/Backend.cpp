@@ -294,6 +294,7 @@ namespace backend
                                                config.conveyorSensors[1].name,
                                                config.conveyorSensors[2].name,
                                                config.conveyorSensors[3].name });
+        m_robot->setConveyorBackend(m_conveyor);
         m_robot->setRotaryTableBackend(m_rotaryTable);
         m_robot->configureAds(m_sharedAdsSymbolicLink,
                                                             RobotBackend::AdsConfig{ .jobIdVariable = config.robotJobId.name,

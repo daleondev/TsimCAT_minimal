@@ -7,6 +7,8 @@ Node {
     property real length: 2000
     property real width: 400
     property real height: 800
+    property bool partPresent: false
+    property real partPosition: 0
     property bool running: false
     property var sensors: [false, false, false, false]
 
@@ -83,17 +85,12 @@ Node {
         }
     }
 
-    // // Parts
-    // Repeater3D {
-    //     model: conveyorRoot.conveyorController ? conveyorRoot.conveyorController.parts : []
-    //     delegate: PartModel {
-    //         required property var modelData
-    //         // Position relative to conveyor center (assuming 0 is start)
-    //         position: Qt.vector3d(modelData.position - conveyorRoot.length / 2, conveyorRoot.height + 10, 0)
-    //         width: modelData.width
-    //         length: modelData.length
-    //         height: modelData.height
-    //         color: "#a6adb3"
-    //     }
-    // }
+    PartModel {
+        visible: conveyorRoot.partPresent
+        position: Qt.vector3d(conveyorRoot.partPosition - conveyorRoot.length / 2, conveyorRoot.height + 10, 0)
+        width: 140
+        length: 140
+        height: 80
+        color: "#a6adb3"
+    }
 }

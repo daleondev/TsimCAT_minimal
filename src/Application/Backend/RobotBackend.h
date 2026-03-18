@@ -16,6 +16,7 @@
 
 namespace backend
 {
+    class ConveyorBackend;
     class RotaryTableBackend;
 
     class RobotBackend : public QObject
@@ -107,6 +108,7 @@ namespace backend
         auto toolYawDegrees() const -> double;
 
         void configureAds(core::link::ISymbolicLink* symbolicLink, AdsConfig config);
+        void setConveyorBackend(ConveyorBackend* conveyorBackend);
         void setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend);
         void detachSymbolicLink();
 
@@ -163,6 +165,7 @@ namespace backend
         auto pollAdsInputsAsync() -> QCoro::Task<void>;
 
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
+        ConveyorBackend* m_conveyorBackend{ nullptr };
         RotaryTableBackend* m_rotaryTableBackend{ nullptr };
         AdsConfig m_adsConfig;
         RobotKinematics m_kinematics;

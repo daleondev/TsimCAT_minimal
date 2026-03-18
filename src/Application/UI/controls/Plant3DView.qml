@@ -138,6 +138,8 @@ Item {
             length: 1250
             height: 720
             width: 430
+            partPresent: root.backend ? root.backend.conveyor.partPresent : false
+            partPosition: root.backend ? root.backend.conveyor.partPosition : 0
             running: root.backend ? root.backend.conveyor.running : false
             sensors: root.backend ? root.backend.conveyor.sensors : [false, false, false, false]
         }

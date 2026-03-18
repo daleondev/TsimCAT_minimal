@@ -1,5 +1,6 @@
 #include "RobotBackend.h"
 
+#include "ConveyorBackend.h"
 #include "RotaryTableBackend.h"
 
 #include <QMetaObject>
@@ -179,6 +180,11 @@ namespace backend
         else {
             m_adsPollTimer->stop();
         }
+    }
+
+    void RobotBackend::setConveyorBackend(ConveyorBackend* conveyorBackend)
+    {
+        m_conveyorBackend = conveyorBackend;
     }
 
     void RobotBackend::setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend)
@@ -470,9 +476,11 @@ namespace backend
                 break;
             }
             case SequenceAction::Place:
-                setGripperGripped(false);
-                setCarriedPartVisible(false);
-                setGripperSensorBlocked(false);
+                if (m_gripperGripped && m_conveyorBackend && m_conveyorBackend->tryPlacePartFromRobot()) {
+                    setGripperGripped(false);
+                    setCarriedPartVisible(false);
+                    setGripperSensorBlocked(false);
+                }
                 break;
         }
     }

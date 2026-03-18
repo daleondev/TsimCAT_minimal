@@ -1,5 +1,7 @@
 #include "RobotBackend.h"
 
+#include "RotaryTableBackend.h"
+
 #include <QMetaObject>
 #include <QThread>
 
@@ -80,9 +82,28 @@ namespace
         return true;
     }
 
-    auto jobPoses(int jobId) -> std::vector<backend::RobotPose>
+    auto poseStep(const backend::RobotPose& pose) -> backend::RobotBackend::SequenceStep
+    {
+        return backend::RobotBackend::SequenceStep{
+            .kind = backend::RobotBackend::SequenceStep::Kind::Pose,
+            .pose = pose,
+            .action = backend::RobotBackend::SequenceAction::Pick,
+        };
+    }
+
+    auto actionStep(backend::RobotBackend::SequenceAction action) -> backend::RobotBackend::SequenceStep
+    {
+        return backend::RobotBackend::SequenceStep{
+            .kind = backend::RobotBackend::SequenceStep::Kind::Action,
+            .pose = {},
+            .action = action,
+        };
+    }
+
+    auto jobPoses(int jobId) -> std::vector<backend::RobotBackend::SequenceStep>
     {
         using backend::RobotPose;
+        using SequenceAction = backend::RobotBackend::SequenceAction;
 
         const RobotPose home{ 800.0, 0.0, 900.0, 0.0, std::numbers::pi / 2.0, 0.0 };
         const RobotPose pickTable{ 615.0, 650.0, 520.0, 0.0, 0.0, std::numbers::pi / 2.0 };
@@ -90,11 +111,15 @@ namespace
 
         switch (jobId) {
             case 1:
-                return { home };
+                return { poseStep(home) };
             case 2:
-                return { home, pickTable, home };
+                return {
+                    poseStep(home), poseStep(pickTable), actionStep(SequenceAction::Pick), poseStep(home)
+                };
             case 5:
-                return { home, placeConveyor, home };
+                return {
+                    poseStep(home), poseStep(placeConveyor), actionStep(SequenceAction::Place), poseStep(home)
+                };
             default:
                 return {};
         }
@@ -156,6 +181,11 @@ namespace backend
         }
     }
 
+    void RobotBackend::setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend)
+    {
+        m_rotaryTableBackend = rotaryTableBackend;
+    }
+
     void RobotBackend::detachSymbolicLink()
     {
         m_adsPollTimer->stop();
@@ -171,6 +201,7 @@ namespace backend
         }
 
         m_currentTrajectory.clear();
+        m_pendingActions.clear();
         m_trajectoryStep = 0;
         setManualMode(false);
 
@@ -213,7 +244,7 @@ namespace backend
         target.yaw += degreesToRadians(deltaYawDegrees);
 
         setManualMode(true);
-        if (!moveToPoseSequence({ target })) {
+        if (!moveToPoseSequence({ SequenceStep{ .kind = SequenceStep::Kind::Pose, .pose = target } })) {
             return false;
         }
 
@@ -299,6 +330,7 @@ namespace backend
 
         if (waypointReached) {
             ++m_trajectoryStep;
+            processPendingActions();
         }
 
         if (m_trajectoryStep >= m_currentTrajectory.size()) {
@@ -342,6 +374,7 @@ namespace backend
 
         m_gripperGripped = value;
         emit gripperGrippedChanged();
+        scheduleAdsStatusWrite();
     }
 
     void RobotBackend::setCarriedPartVisible(bool value)
@@ -423,43 +456,64 @@ namespace backend
         launchTask(writeStatusAsync(m_activeJobId, m_areaFreeRobot));
     }
 
-    void RobotBackend::completeCurrentMotion()
+    void RobotBackend::applySequenceAction(SequenceAction action)
     {
-        m_currentTrajectory.clear();
-        m_trajectoryStep = 0;
-        const auto completedJobId = m_activeJobId;
-        setInMotion(false);
-
-        switch (completedJobId) {
-            case 2:
-                setGripperSensorBlocked(true);
-                setGripperGripped(true);
-                setCarriedPartVisible(true);
+        switch (action) {
+            case SequenceAction::Pick: {
+                const auto pickedPart = !m_gripperGripped && m_rotaryTableBackend &&
+                                        m_rotaryTableBackend->tryTakePartForRobotPick();
+                if (pickedPart) {
+                    setGripperSensorBlocked(true);
+                    setGripperGripped(true);
+                    setCarriedPartVisible(true);
+                }
                 break;
-            case 5:
+            }
+            case SequenceAction::Place:
                 setGripperGripped(false);
                 setCarriedPartVisible(false);
                 setGripperSensorBlocked(false);
                 break;
-            default:
-                break;
         }
+    }
+
+    void RobotBackend::processPendingActions()
+    {
+        while (!m_pendingActions.empty() && m_pendingActions.front().trajectoryIndex == m_trajectoryStep) {
+            applySequenceAction(m_pendingActions.front().action);
+            m_pendingActions.erase(m_pendingActions.begin());
+        }
+    }
+
+    void RobotBackend::completeCurrentMotion()
+    {
+        m_currentTrajectory.clear();
+        m_pendingActions.clear();
+        m_trajectoryStep = 0;
+        setInMotion(false);
 
         setActiveJobId(0);
     }
 
-    auto RobotBackend::moveToPoseSequence(const std::vector<RobotPose>& poses) -> bool
+    auto RobotBackend::moveToPoseSequence(const std::vector<SequenceStep>& steps) -> bool
     {
-        if (poses.empty()) {
+        if (steps.empty()) {
             return false;
         }
 
         auto current = m_jointAnglesDegrees;
         auto currentSeed = jointsToRadians(current);
         std::vector<std::array<double, 6>> trajectory;
+        std::vector<PendingAction> pendingActions;
 
-        for (const auto& pose : poses) {
-            const auto jointsRadians = m_kinematics.inverse(pose, currentSeed);
+        for (const auto& step : steps) {
+            if (step.kind == SequenceStep::Kind::Action) {
+                pendingActions.push_back(
+                  PendingAction{ .trajectoryIndex = trajectory.size(), .action = step.action });
+                continue;
+            }
+
+            const auto jointsRadians = m_kinematics.inverse(step.pose, currentSeed);
             if (jointsRadians.empty()) {
                 return false;
             }
@@ -486,7 +540,9 @@ namespace backend
         }
 
         m_currentTrajectory = std::move(trajectory);
+        m_pendingActions = std::move(pendingActions);
         m_trajectoryStep = 0;
+        processPendingActions();
         return true;
     }
 
@@ -570,6 +626,12 @@ namespace backend
                     break;
                 }
             }
+        }
+
+        if (!m_adsConfig.gripperSensorVariable.trimmed().isEmpty()) {
+            auto writeResult = co_await toQCoroTask(
+              m_symbolicLink->write(m_adsConfig.gripperSensorVariable.toStdString(), m_gripperGripped));
+            (void)writeResult;
         }
 
         for (size_t index = 0; index < m_adsConfig.areaFreeRobotVariables.size(); ++index) {

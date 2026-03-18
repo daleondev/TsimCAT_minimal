@@ -67,6 +67,10 @@
                 "name": "MAIN.actualJobId",
                 "type": "int32"
             },
+            "gripperSensor": {
+                "name": "MAIN.GripperSensor",
+                "type": "bool"
+            },
             "areaFreeRobot1": {
                 "name": "MAIN.AreaFreeRobot1",
                 "type": "bool"

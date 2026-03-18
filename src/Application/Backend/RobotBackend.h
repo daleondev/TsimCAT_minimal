@@ -16,6 +16,8 @@
 
 namespace backend
 {
+    class RotaryTableBackend;
+
     class RobotBackend : public QObject
     {
         Q_OBJECT
@@ -51,10 +53,30 @@ namespace backend
             UInt32
         };
 
+        enum class SequenceAction
+        {
+            Pick,
+            Place
+        };
+
+        struct SequenceStep
+        {
+            enum class Kind
+            {
+                Pose,
+                Action
+            };
+
+            Kind kind{ Kind::Pose };
+            RobotPose pose{};
+            SequenceAction action{ SequenceAction::Pick };
+        };
+
         struct AdsConfig
         {
             QString jobIdVariable;
             QString actualJobIdVariable;
+            QString gripperSensorVariable;
             JobIdType jobIdType{ JobIdType::Int32 };
             JobIdType actualJobIdType{ JobIdType::Int32 };
             std::array<QString, 4> areaFreePlcVariables;
@@ -85,6 +107,7 @@ namespace backend
         auto toolYawDegrees() const -> double;
 
         void configureAds(core::link::ISymbolicLink* symbolicLink, AdsConfig config);
+        void setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend);
         void detachSymbolicLink();
 
         Q_INVOKABLE void executeJob(int jobId);
@@ -128,8 +151,10 @@ namespace backend
         void updateToolPose();
         void updateRobotAreaState();
         void scheduleAdsStatusWrite();
+        void applySequenceAction(SequenceAction action);
+        void processPendingActions();
         void completeCurrentMotion();
-        auto moveToPoseSequence(const std::vector<RobotPose>& poses) -> bool;
+        auto moveToPoseSequence(const std::vector<SequenceStep>& steps) -> bool;
         auto moveToJointTarget(const std::array<double, 6>& jointsDegrees) -> bool;
         auto planTrajectory(const std::array<double, 6>& startJoints,
                             const std::array<double, 6>& targetJoints) const
@@ -138,6 +163,7 @@ namespace backend
         auto pollAdsInputsAsync() -> QCoro::Task<void>;
 
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
+        RotaryTableBackend* m_rotaryTableBackend{ nullptr };
         AdsConfig m_adsConfig;
         RobotKinematics m_kinematics;
         QTimer* m_simulationTimer{ nullptr };
@@ -148,7 +174,15 @@ namespace backend
         std::array<bool, 4> m_areaFreePlc{ true, true, true, true };
         std::array<bool, 4> m_areaFreeRobot{ true, true, true, true };
         RobotPose m_toolPose{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+
+        struct PendingAction
+        {
+            size_t trajectoryIndex{ 0 };
+            SequenceAction action{ SequenceAction::Pick };
+        };
+
         std::vector<std::array<double, 6>> m_currentTrajectory;
+        std::vector<PendingAction> m_pendingActions;
         size_t m_trajectoryStep{ 0 };
         int m_activeJobId{ 0 };
         int m_lastProcessedAdsJobId{ 0 };

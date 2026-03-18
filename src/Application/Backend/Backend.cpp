@@ -89,6 +89,7 @@ namespace backend
         std::array<VariableConfig, 4> conveyorSensors;
         VariableConfig robotJobId;
         VariableConfig robotActualJobId;
+        VariableConfig robotGripperSensor;
         std::array<VariableConfig, 4> robotAreaFreePlc;
         std::array<VariableConfig, 4> robotAreaFreeRobot;
     };
@@ -190,6 +191,8 @@ namespace backend
         config.robotJobId = readVariableConfig(robot, QStringLiteral("jobId"), QStringLiteral("int32"));
         config.robotActualJobId =
           readVariableConfig(robot, QStringLiteral("actualJobId"), QStringLiteral("int32"));
+        config.robotGripperSensor =
+          readVariableConfig(robot, QStringLiteral("gripperSensor"), QStringLiteral("bool"));
         config.robotAreaFreePlc = {
             readVariableConfig(robot, QStringLiteral("areaFreePLC1"), QStringLiteral("bool")),
             readVariableConfig(robot, QStringLiteral("areaFreePLC2"), QStringLiteral("bool")),
@@ -214,6 +217,7 @@ namespace backend
           config.rotaryActualPosition.isConfigured() || config.rotarySensor0.isConfigured() ||
           config.rotarySensor180.isConfigured() || config.conveyorRun.isConfigured() ||
           config.robotJobId.isConfigured() || config.robotActualJobId.isConfigured() ||
+          config.robotGripperSensor.isConfigured() ||
           std::ranges::any_of(config.conveyorSensors,
                               [](const auto& variable) { return variable.isConfigured(); }) ||
           std::ranges::any_of(config.robotAreaFreePlc,
@@ -237,6 +241,10 @@ namespace backend
         }
 
         if (config.robotActualJobId.isConfigured() && !config.robotActualJobId.isIntegerLike()) {
+            co_return;
+        }
+
+        if (config.robotGripperSensor.isConfigured() && !config.robotGripperSensor.isBoolean()) {
             co_return;
         }
 
@@ -286,10 +294,12 @@ namespace backend
                                                config.conveyorSensors[1].name,
                                                config.conveyorSensors[2].name,
                                                config.conveyorSensors[3].name });
+        m_robot->setRotaryTableBackend(m_rotaryTable);
         m_robot->configureAds(m_sharedAdsSymbolicLink,
                                                             RobotBackend::AdsConfig{ .jobIdVariable = config.robotJobId.name,
-                                                                                                             .actualJobIdVariable =
-                                                                                                                 config.robotActualJobId.name,
+                                                                                                             .actualJobIdVariable = config.robotActualJobId.name,
+                                                                                                             .gripperSensorVariable =
+                                                                                                                 config.robotGripperSensor.name,
                                                                                                              .jobIdType = toJobIdType(config.robotJobId),
                                                                                                              .actualJobIdType =
                                                                                                                  toJobIdType(config.robotActualJobId),

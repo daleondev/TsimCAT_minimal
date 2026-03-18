@@ -59,6 +59,7 @@ namespace backend
         void configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                       const QString& sensor0VariableName,
                                       const QString& sensor180VariableName);
+        auto tryTakePartForRobotPick() -> bool;
 
       signals:
         void angleDegreesChanged();

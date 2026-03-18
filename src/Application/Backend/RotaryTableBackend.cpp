@@ -121,6 +121,23 @@ namespace backend
         }
     }
 
+    auto RotaryTableBackend::tryTakePartForRobotPick() -> bool
+    {
+        const auto side = detectSpawnSide(m_angleDegrees);
+
+        if (side == SpawnSide::Zero && m_part180Present) {
+            setPart180Present(false);
+            return true;
+        }
+
+        if (side == SpawnSide::OneEighty && m_part0Present) {
+            setPart0Present(false);
+            return true;
+        }
+
+        return false;
+    }
+
     void RotaryTableBackend::launchTask(QCoro::Task<void>&& task)
     {
         auto guarded = std::move(task).then([]() {}, [](const std::exception&) {});

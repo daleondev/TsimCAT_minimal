@@ -8,13 +8,14 @@ Node {
     property real radius: 480
     property real height: 760
     property real angleDegrees: 0
+    property bool part0Present: false
+    property bool part180Present: false
     property bool sensor0Active: false
     property bool sensor180Active: false
 
     readonly property real platterScale: rotaryRoot.radius / 50
     readonly property real innerPlatterScale: rotaryRoot.platterScale * 0.8
     readonly property real pedestalScale: rotaryRoot.radius / 95
-
 
     PrincipledMaterial {
         id: accentPaint
@@ -37,25 +38,32 @@ Node {
         roughness: 0.32
     }
 
+    PrincipledMaterial {
+        id: partPaint
+        baseColor: "#a6adb3"
+        metalness: 0.12
+        roughness: 0.64
+    }
+
     Model {
         source: "#Cube"
         position: Qt.vector3d(0, 90, 0)
         scale: Qt.vector3d(rotaryRoot.platterScale * 1, 1.8, rotaryRoot.platterScale * 1)
-        materials: [ machineBasePaint ]
+        materials: [machineBasePaint]
     }
 
     Model {
         source: "#Cube"
         position: Qt.vector3d(0, 245, 0)
         scale: Qt.vector3d(rotaryRoot.platterScale * 0.75, 1.35, rotaryRoot.platterScale * 0.75)
-        materials: [ trimPaint ]
+        materials: [trimPaint]
     }
 
     Model {
         source: "#Cylinder"
         position: Qt.vector3d(0, rotaryRoot.height - 190, 0)
         scale: Qt.vector3d(rotaryRoot.pedestalScale * 0.76, 5.3, rotaryRoot.pedestalScale * 0.76)
-        materials: [ machineBasePaint ]
+        materials: [machineBasePaint]
     }
 
     Node {
@@ -66,14 +74,14 @@ Node {
         Model {
             source: "#Cylinder"
             scale: Qt.vector3d(rotaryRoot.platterScale, 0.42, rotaryRoot.platterScale)
-            materials: [ accentPaint ]
+            materials: [accentPaint]
         }
 
         Model {
             source: "#Cylinder"
             position: Qt.vector3d(0, 18, 0)
             scale: Qt.vector3d(rotaryRoot.innerPlatterScale, 0.18, rotaryRoot.innerPlatterScale)
-            materials: [ machineBasePaint ]
+            materials: [machineBasePaint]
         }
 
         // Center safety shield
@@ -81,31 +89,38 @@ Node {
             source: "#Cylinder"
             position: Qt.vector3d(0, 170, 0)
             scale: Qt.vector3d(1.2, 3.0, 1.2)
-            materials: [ machineBasePaint ]
+            materials: [machineBasePaint]
         }
 
         Model {
             source: "#Cylinder"
             position: Qt.vector3d(0, 320, 0)
             scale: Qt.vector3d(2.4, 0.3, 2.4)
-            materials: [ machineBasePaint ]
+            materials: [machineBasePaint]
         }
 
         Model {
             source: "#Cube"
             position: Qt.vector3d(0, 195, 0)
             scale: Qt.vector3d(0.2, 2.2, rotaryRoot.platterScale * 1)
-            materials: [ machineBasePaint ]
+            materials: [machineBasePaint]
         }
 
-        // PartModel { // PART
-        //     visible: rotaryRoot.partPresent
-        //     position: Qt.vector3d(rotaryRoot.radius * 0.5, 58, 0)
-        //     width: 140
-        //     length: 140
-        //     height: 80
-        //     color: "#a6adb3"
-        // }
+        Model {
+            visible: rotaryRoot.part0Present
+            source: "#Cube"
+            position: Qt.vector3d(-rotaryRoot.radius * 0.52, 58, 0)
+            scale: Qt.vector3d(1.4, 0.8, 1.4)
+            materials: [partPaint]
+        }
+
+        Model {
+            visible: rotaryRoot.part180Present
+            source: "#Cube"
+            position: Qt.vector3d(rotaryRoot.radius * 0.52, 58, 0)
+            scale: Qt.vector3d(1.4, 0.8, 1.4)
+            materials: [partPaint]
+        }
     }
 
     // Sensor indicators (like conveyor light barriers)

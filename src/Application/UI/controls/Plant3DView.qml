@@ -105,6 +105,8 @@ Item {
 
             RotaryTableModel {
                 angleDegrees: root.backend ? root.backend.rotaryTable.angleDegrees : 0
+                part0Present: root.backend ? root.backend.rotaryTable.part0Present : false
+                part180Present: root.backend ? root.backend.rotaryTable.part180Present : false
                 sensor0Active: root.backend ? root.backend.rotaryTable.sensor0Active : false
                 sensor180Active: root.backend ? root.backend.rotaryTable.sensor180Active : false
             }

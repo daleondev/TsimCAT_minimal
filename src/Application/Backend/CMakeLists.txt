@@ -8,6 +8,8 @@ target_link_libraries(TsimCAT_Backend
 
     PRIVATE
     core::link
+    Eigen3::Eigen
+    orocos-kdl
 )
 
 target_compile_features(
@@ -26,6 +28,10 @@ qt_add_qml_module(TsimCAT_Backend
         AdsConfigBackend.cpp
         ConveyorBackend.h
         ConveyorBackend.cpp
+        RobotBackend.h
+        RobotBackend.cpp
+        RobotKinematics.h
+        RobotKinematics.cpp
         RotaryTableBackend.h
         RotaryTableBackend.cpp
         Backend.h

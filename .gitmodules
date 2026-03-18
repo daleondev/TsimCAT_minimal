@@ -10,3 +10,9 @@
 [submodule "third_party/open62541"]
 	path = third_party/open62541
 	url = https://github.com/open62541/open62541.git
+[submodule "third_party/ompl"]
+	path = third_party/ompl
+	url = https://github.com/ompl/ompl.git
+[submodule "third_party/kdl"]
+	path = third_party/kdl
+	url = https://github.com/orocos/orocos_kinematics_dynamics.git

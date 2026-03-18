@@ -2,6 +2,7 @@
 
 #include "AdsConfigBackend.h"
 #include "ConveyorBackend.h"
+#include "RobotBackend.h"
 #include "RotaryTableBackend.h"
 
 #include <QCoro/QCoroTask>
@@ -27,6 +28,7 @@ namespace backend
         QML_ELEMENT
         Q_PROPERTY(backend::AdsConfigBackend* adsConfig READ adsConfig CONSTANT)
         Q_PROPERTY(backend::ConveyorBackend* conveyor READ conveyor CONSTANT)
+        Q_PROPERTY(backend::RobotBackend* robot READ robot CONSTANT)
         Q_PROPERTY(backend::RotaryTableBackend* rotaryTable READ rotaryTable CONSTANT)
         Q_PROPERTY(QString welcomeMessage READ welcomeMessage CONSTANT)
 
@@ -36,6 +38,7 @@ namespace backend
 
         auto adsConfig() const -> AdsConfigBackend*;
         auto conveyor() const -> ConveyorBackend*;
+        auto robot() const -> RobotBackend*;
         auto rotaryTable() const -> RotaryTableBackend*;
         QString welcomeMessage() const;
 
@@ -49,6 +52,7 @@ namespace backend
 
         AdsConfigBackend* m_adsConfig{ nullptr };
         ConveyorBackend* m_conveyor{ nullptr };
+        RobotBackend* m_robot{ nullptr };
         RotaryTableBackend* m_rotaryTable{ nullptr };
         std::unique_ptr<core::link::ILink> m_sharedAdsLink;
         core::link::ISymbolicLink* m_sharedAdsSymbolicLink{ nullptr };

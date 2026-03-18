@@ -41,7 +41,30 @@ namespace backend
             {
                 return hasType(QStringLiteral("float")) || hasType(QStringLiteral("double"));
             }
+
+            auto isBoolean() const -> bool { return hasType(QStringLiteral("bool")); }
+
+            auto isIntegerLike() const -> bool
+            {
+                return hasType(QStringLiteral("int16")) || hasType(QStringLiteral("uint16")) ||
+                       hasType(QStringLiteral("int32")) || hasType(QStringLiteral("uint32")) ||
+                       hasType(QStringLiteral("int")) || hasType(QStringLiteral("uint"));
+            }
         };
+
+        auto toJobIdType(const VariableConfig& config) -> RobotBackend::JobIdType
+        {
+            if (config.hasType(QStringLiteral("int16"))) {
+                return RobotBackend::JobIdType::Int16;
+            }
+            if (config.hasType(QStringLiteral("uint16")) || config.hasType(QStringLiteral("uint"))) {
+                return RobotBackend::JobIdType::UInt16;
+            }
+            if (config.hasType(QStringLiteral("uint32"))) {
+                return RobotBackend::JobIdType::UInt32;
+            }
+            return RobotBackend::JobIdType::Int32;
+        }
 
         auto readVariableConfig(const QJsonObject& object, QStringView key, QStringView defaultType)
           -> VariableConfig
@@ -64,12 +87,17 @@ namespace backend
         VariableConfig rotarySensor180;
         VariableConfig conveyorRun;
         std::array<VariableConfig, 4> conveyorSensors;
+        VariableConfig robotJobId;
+        VariableConfig robotActualJobId;
+        std::array<VariableConfig, 4> robotAreaFreePlc;
+        std::array<VariableConfig, 4> robotAreaFreeRobot;
     };
 
     Backend::Backend(QObject* parent)
       : QObject(parent)
       , m_adsConfig(new AdsConfigBackend(this))
       , m_conveyor(new ConveyorBackend(this))
+      , m_robot(new RobotBackend(this))
       , m_rotaryTable(new RotaryTableBackend(this))
     {
         launchTask(initializeSharedAdsLinkAsync());
@@ -83,11 +111,16 @@ namespace backend
         if (m_conveyor) {
             m_conveyor->detachSymbolicLink();
         }
+        if (m_robot) {
+            m_robot->detachSymbolicLink();
+        }
     }
 
     auto Backend::adsConfig() const -> AdsConfigBackend* { return m_adsConfig; }
 
     auto Backend::conveyor() const -> ConveyorBackend* { return m_conveyor; }
+
+    auto Backend::robot() const -> RobotBackend* { return m_robot; }
 
     auto Backend::rotaryTable() const -> RotaryTableBackend* { return m_rotaryTable; }
 
@@ -139,6 +172,7 @@ namespace backend
         const auto adsVariables = root.value(QStringLiteral("adsVariables")).toObject();
         const auto rotaryTable = adsVariables.value(QStringLiteral("rotaryTable")).toObject();
         const auto conveyor = adsVariables.value(QStringLiteral("conveyor")).toObject();
+        const auto robot = adsVariables.value(QStringLiteral("robot")).toObject();
 
         config.rotaryActualPosition =
           readVariableConfig(rotaryTable, QStringLiteral("actualPosition"), QStringLiteral("double"));
@@ -153,6 +187,21 @@ namespace backend
             readVariableConfig(conveyor, QStringLiteral("sensor3"), QStringLiteral("bool")),
             readVariableConfig(conveyor, QStringLiteral("sensor4"), QStringLiteral("bool"))
         };
+        config.robotJobId = readVariableConfig(robot, QStringLiteral("jobId"), QStringLiteral("int32"));
+        config.robotActualJobId =
+          readVariableConfig(robot, QStringLiteral("actualJobId"), QStringLiteral("int32"));
+        config.robotAreaFreePlc = {
+            readVariableConfig(robot, QStringLiteral("areaFreePLC1"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreePLC2"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreePLC3"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreePLC4"), QStringLiteral("bool"))
+        };
+        config.robotAreaFreeRobot = {
+            readVariableConfig(robot, QStringLiteral("areaFreeRobot1"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreeRobot2"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreeRobot3"), QStringLiteral("bool")),
+            readVariableConfig(robot, QStringLiteral("areaFreeRobot4"), QStringLiteral("bool"))
+        };
 
         return config;
     }
@@ -164,7 +213,12 @@ namespace backend
         const auto hasConfiguredVariables =
           config.rotaryActualPosition.isConfigured() || config.rotarySensor0.isConfigured() ||
           config.rotarySensor180.isConfigured() || config.conveyorRun.isConfigured() ||
+          config.robotJobId.isConfigured() || config.robotActualJobId.isConfigured() ||
           std::ranges::any_of(config.conveyorSensors,
+                              [](const auto& variable) { return variable.isConfigured(); }) ||
+          std::ranges::any_of(config.robotAreaFreePlc,
+                              [](const auto& variable) { return variable.isConfigured(); }) ||
+          std::ranges::any_of(config.robotAreaFreeRobot,
                               [](const auto& variable) { return variable.isConfigured(); });
         if (!hasConfiguredVariables) {
             co_return;
@@ -175,6 +229,26 @@ namespace backend
         }
 
         if (config.conveyorRun.isConfigured() && !config.conveyorRun.hasType(QStringLiteral("bool"))) {
+            co_return;
+        }
+
+        if (config.robotJobId.isConfigured() && !config.robotJobId.isIntegerLike()) {
+            co_return;
+        }
+
+        if (config.robotActualJobId.isConfigured() && !config.robotActualJobId.isIntegerLike()) {
+            co_return;
+        }
+
+        if (std::ranges::any_of(config.robotAreaFreePlc, [](const auto& variable) {
+            return variable.isConfigured() && !variable.isBoolean();
+        })) {
+            co_return;
+        }
+
+        if (std::ranges::any_of(config.robotAreaFreeRobot, [](const auto& variable) {
+            return variable.isConfigured() && !variable.isBoolean();
+        })) {
             co_return;
         }
 
@@ -212,6 +286,25 @@ namespace backend
                                                config.conveyorSensors[1].name,
                                                config.conveyorSensors[2].name,
                                                config.conveyorSensors[3].name });
+        m_robot->configureAds(m_sharedAdsSymbolicLink,
+                                                            RobotBackend::AdsConfig{ .jobIdVariable = config.robotJobId.name,
+                                                                                                             .actualJobIdVariable =
+                                                                                                                 config.robotActualJobId.name,
+                                                                                                             .jobIdType = toJobIdType(config.robotJobId),
+                                                                                                             .actualJobIdType =
+                                                                                                                 toJobIdType(config.robotActualJobId),
+                                                                                                             .areaFreePlcVariables = {
+                                                                                                                     config.robotAreaFreePlc[0].name,
+                                                                                                                     config.robotAreaFreePlc[1].name,
+                                                                                                                     config.robotAreaFreePlc[2].name,
+                                                                                                                     config.robotAreaFreePlc[3].name,
+                                                                                                             },
+                                                                                                             .areaFreeRobotVariables = {
+                                                                                                                     config.robotAreaFreeRobot[0].name,
+                                                                                                                     config.robotAreaFreeRobot[1].name,
+                                                                                                                     config.robotAreaFreeRobot[2].name,
+                                                                                                                     config.robotAreaFreeRobot[3].name,
+                                                                                                             } });
 
         if (config.rotaryActualPosition.isConfigured()) {
             const auto actualPositionType = config.rotaryActualPosition.hasType(QStringLiteral("float"))

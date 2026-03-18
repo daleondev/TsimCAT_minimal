@@ -14,6 +14,8 @@ namespace
     constexpr double kTakeAtExitThreshold = 1120.0;
     constexpr double kPartHalfLength = 70.0;
     constexpr double kConveyorSpeedPerSecond = 220.0;
+    constexpr double kDamperTravelPerSecond = 0.7;
+    constexpr double kDamperSensorTolerance = 0.001;
 
     template<typename T>
     auto toQCoroTask(core::coro::Task<T>&& task) -> QCoro::Task<T>
@@ -40,6 +42,18 @@ namespace backend
 
     auto ConveyorBackend::partPosition() const -> double { return m_partPosition; }
 
+    auto ConveyorBackend::damperOpen() const -> bool { return m_damperPosition > kDamperSensorTolerance; }
+
+    auto ConveyorBackend::damperPosition() const -> double { return m_damperPosition; }
+
+    auto ConveyorBackend::damperMovingUpCommand() const -> bool { return m_damperMoveUpCommand; }
+
+    auto ConveyorBackend::damperMovingDownCommand() const -> bool { return m_damperMoveDownCommand; }
+
+    auto ConveyorBackend::damperUpSensorActive() const -> bool { return m_damperUpSensorActive; }
+
+    auto ConveyorBackend::damperDownSensorActive() const -> bool { return m_damperDownSensorActive; }
+
     auto ConveyorBackend::running() const -> bool { return m_running; }
 
     auto ConveyorBackend::sensors() const -> QVariantList
@@ -54,18 +68,19 @@ namespace backend
 
     void ConveyorBackend::detachSymbolicLink()
     {
-        if (m_symbolicLink && m_runSubscription.isValid()) {
-            m_symbolicLink->unsubscribeRawSync(m_runSubscription.id());
-        }
-
-        m_runSubscription = {};
+        unsubscribe(m_runSubscription);
+        unsubscribe(m_damperMoveUpSubscription);
+        unsubscribe(m_damperMoveDownSubscription);
         m_symbolicLink = nullptr;
     }
 
     void ConveyorBackend::subscribeRun(core::link::ISymbolicLink* symbolicLink, const QString& variableName)
     {
-        detachSymbolicLink();
-        m_symbolicLink = symbolicLink;
+        if (symbolicLink) {
+            m_symbolicLink = symbolicLink;
+        }
+
+        unsubscribe(m_runSubscription);
 
         if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
             return;
@@ -83,6 +98,36 @@ namespace backend
 
         m_sensorVariableNames = variableNames;
         updateSensorsFromPart();
+    }
+
+    void ConveyorBackend::configureDamperVariables(core::link::ISymbolicLink* symbolicLink,
+                                                   const QString& moveUpVariable,
+                                                   const QString& moveDownVariable,
+                                                   const QString& upSensorVariable,
+                                                   const QString& downSensorVariable)
+    {
+        if (symbolicLink) {
+            m_symbolicLink = symbolicLink;
+        }
+
+        unsubscribe(m_damperMoveUpSubscription);
+        unsubscribe(m_damperMoveDownSubscription);
+
+        m_damperUpSensorVariableName = upSensorVariable;
+        m_damperDownSensorVariableName = downSensorVariable;
+        updateDamperSensors();
+
+        if (!m_symbolicLink) {
+            return;
+        }
+
+        if (!moveUpVariable.trimmed().isEmpty()) {
+            launchTask(subscribeDamperMoveUpAsync(moveUpVariable));
+        }
+
+        if (!moveDownVariable.trimmed().isEmpty()) {
+            launchTask(subscribeDamperMoveDownAsync(moveDownVariable));
+        }
     }
 
     auto ConveyorBackend::tryPlacePartFromRobot() -> bool
@@ -116,24 +161,36 @@ namespace backend
         QCoro::connect(std::move(guarded), this, []() {});
     }
 
+    void ConveyorBackend::unsubscribe(core::link::Subscription<bool>& subscription)
+    {
+        if (m_symbolicLink && subscription.isValid()) {
+            m_symbolicLink->unsubscribeRawSync(subscription.id());
+        }
+
+        subscription = {};
+    }
+
     void ConveyorBackend::onSimulationTick()
     {
         const auto elapsedMs = static_cast<double>(m_stepClock.restart());
         const auto deltaSeconds = std::max(0.001, elapsedMs / 1000.0);
 
-        if (!m_running || !m_partPresent) {
-            return;
+        if (m_running && m_partPresent) {
+            setPartPositionInternal(m_partPosition + deltaSeconds * kConveyorSpeedPerSecond);
+
+            if (m_partPosition > kConveyorExitPosition) {
+                setPartPresentInternal(false);
+                updateSensorsFromPart();
+            }
+            else {
+                updateSensorsFromPart();
+            }
         }
 
-        setPartPositionInternal(m_partPosition + deltaSeconds * kConveyorSpeedPerSecond);
-
-        if (m_partPosition > kConveyorExitPosition) {
-            setPartPresentInternal(false);
-            updateSensorsFromPart();
-            return;
+        if (m_damperMoveUpCommand != m_damperMoveDownCommand) {
+            const auto direction = m_damperMoveUpCommand ? 1.0 : -1.0;
+            setDamperPositionInternal(m_damperPosition + direction * deltaSeconds * kDamperTravelPerSecond);
         }
-
-        updateSensorsFromPart();
     }
 
     void ConveyorBackend::setRunning(bool value)
@@ -171,6 +228,44 @@ namespace backend
         emit partPositionChanged();
     }
 
+    void ConveyorBackend::setDamperMoveUpCommand(bool value)
+    {
+        if (m_damperMoveUpCommand == value) {
+            return;
+        }
+
+        m_damperMoveUpCommand = value;
+        emit damperCommandsChanged();
+    }
+
+    void ConveyorBackend::setDamperMoveDownCommand(bool value)
+    {
+        if (m_damperMoveDownCommand == value) {
+            return;
+        }
+
+        m_damperMoveDownCommand = value;
+        emit damperCommandsChanged();
+    }
+
+    void ConveyorBackend::setDamperPositionInternal(double value)
+    {
+        const auto nextValue = std::clamp(value, 0.0, 1.0);
+        if (qFuzzyCompare(m_damperPosition, nextValue)) {
+            return;
+        }
+
+        const auto wasOpen = damperOpen();
+        m_damperPosition = nextValue;
+        emit damperPositionChanged();
+
+        if (wasOpen != damperOpen()) {
+            emit damperOpenChanged();
+        }
+
+        updateDamperSensors();
+    }
+
     void ConveyorBackend::setSensorActiveInternal(int index, bool active)
     {
         if (index < 0 || index >= static_cast<int>(m_sensors.size())) {
@@ -200,6 +295,33 @@ namespace backend
         }
     }
 
+    void ConveyorBackend::updateDamperSensors()
+    {
+        const auto nextUpSensor = m_damperPosition >= 1.0 - kDamperSensorTolerance;
+        const auto nextDownSensor = m_damperPosition <= kDamperSensorTolerance;
+
+        auto sensorStateChanged = false;
+        if (m_damperUpSensorActive != nextUpSensor) {
+            m_damperUpSensorActive = nextUpSensor;
+            sensorStateChanged = true;
+            if (m_symbolicLink && !m_damperUpSensorVariableName.trimmed().isEmpty()) {
+                launchTask(writeBoolAsync(m_damperUpSensorVariableName, m_damperUpSensorActive));
+            }
+        }
+
+        if (m_damperDownSensorActive != nextDownSensor) {
+            m_damperDownSensorActive = nextDownSensor;
+            sensorStateChanged = true;
+            if (m_symbolicLink && !m_damperDownSensorVariableName.trimmed().isEmpty()) {
+                launchTask(writeBoolAsync(m_damperDownSensorVariableName, m_damperDownSensorActive));
+            }
+        }
+
+        if (sensorStateChanged) {
+            emit damperSensorsChanged();
+        }
+    }
+
     auto ConveyorBackend::subscribeRunAsync(QString variableName) -> QCoro::Task<void>
     {
         if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
@@ -216,6 +338,38 @@ namespace backend
         launchTask(consumeRunAsync());
     }
 
+    auto ConveyorBackend::subscribeDamperMoveUpAsync(QString variableName) -> QCoro::Task<void>
+    {
+        if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
+            co_return;
+        }
+
+        auto subscriptionResult =
+          co_await toQCoroTask(m_symbolicLink->subscribe<bool>(variableName.toStdString()));
+        if (!subscriptionResult) {
+            co_return;
+        }
+
+        m_damperMoveUpSubscription = std::move(subscriptionResult).value();
+        launchTask(consumeDamperMoveUpAsync());
+    }
+
+    auto ConveyorBackend::subscribeDamperMoveDownAsync(QString variableName) -> QCoro::Task<void>
+    {
+        if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
+            co_return;
+        }
+
+        auto subscriptionResult =
+          co_await toQCoroTask(m_symbolicLink->subscribe<bool>(variableName.toStdString()));
+        if (!subscriptionResult) {
+            co_return;
+        }
+
+        m_damperMoveDownSubscription = std::move(subscriptionResult).value();
+        launchTask(consumeDamperMoveDownAsync());
+    }
+
     auto ConveyorBackend::consumeRunAsync() -> QCoro::Task<void>
     {
         while (m_runSubscription.isValid()) {
@@ -225,6 +379,34 @@ namespace backend
             }
 
             setRunning(nextValue.value());
+        }
+
+        co_return;
+    }
+
+    auto ConveyorBackend::consumeDamperMoveUpAsync() -> QCoro::Task<void>
+    {
+        while (m_damperMoveUpSubscription.isValid()) {
+            auto nextValue = co_await toQCoroTask(m_damperMoveUpSubscription.stream.next());
+            if (!nextValue.has_value()) {
+                break;
+            }
+
+            setDamperMoveUpCommand(nextValue.value());
+        }
+
+        co_return;
+    }
+
+    auto ConveyorBackend::consumeDamperMoveDownAsync() -> QCoro::Task<void>
+    {
+        while (m_damperMoveDownSubscription.isValid()) {
+            auto nextValue = co_await toQCoroTask(m_damperMoveDownSubscription.stream.next());
+            if (!nextValue.has_value()) {
+                break;
+            }
+
+            setDamperMoveDownCommand(nextValue.value());
         }
 
         co_return;

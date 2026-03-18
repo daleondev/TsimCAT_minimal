@@ -6,6 +6,7 @@ Item {
     id: root
     property var backend: null
     property bool exitDamperOpen: false
+    property real exitDamperPosition: exitDamperOpen ? 1 : 0
     property bool robotPanelVisible: false
     property real jointJogStepDegrees: 5
     property real cartesianJogStepMillimeters: 25
@@ -88,6 +89,7 @@ Item {
             id: fence
             position: Qt.vector3d(150, 0, 120)
             exitDamperOpen: root.exitDamperOpen
+            exitDamperPosition: root.exitDamperPosition
         }
 
         Model {

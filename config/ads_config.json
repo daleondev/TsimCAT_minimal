@@ -40,6 +40,22 @@
             "sensor4": {
                 "name": "8 Dig In (EL1008).Channel 6",
                 "type": "bool"
+            },
+            "damperDownSensor": {
+                "name": "8 Dig In (EL1008).Channel 7",
+                "type": "bool"
+            },
+            "damperUpSensor": {
+                "name": "8 Dig In (EL1008).Channel 8",
+                "type": "bool"
+            },
+            "damperMoveDown": {
+                "name": "8 Dig Out (EL2008).Channel 2",
+                "type": "bool"
+            },
+            "damperMoveUp": {
+                "name": "8 Dig Out (EL2008).Channel 3",
+                "type": "bool"
             }
         },
         "robot": {

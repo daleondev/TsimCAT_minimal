@@ -87,6 +87,10 @@ namespace backend
         VariableConfig rotarySensor180;
         VariableConfig conveyorRun;
         std::array<VariableConfig, 4> conveyorSensors;
+        VariableConfig conveyorDamperMoveUp;
+        VariableConfig conveyorDamperMoveDown;
+        VariableConfig conveyorDamperUpSensor;
+        VariableConfig conveyorDamperDownSensor;
         VariableConfig robotJobId;
         VariableConfig robotActualJobId;
         VariableConfig robotGripperSensor;
@@ -188,6 +192,14 @@ namespace backend
             readVariableConfig(conveyor, QStringLiteral("sensor3"), QStringLiteral("bool")),
             readVariableConfig(conveyor, QStringLiteral("sensor4"), QStringLiteral("bool"))
         };
+        config.conveyorDamperMoveUp =
+          readVariableConfig(conveyor, QStringLiteral("damperMoveUp"), QStringLiteral("bool"));
+        config.conveyorDamperMoveDown =
+          readVariableConfig(conveyor, QStringLiteral("damperMoveDown"), QStringLiteral("bool"));
+        config.conveyorDamperUpSensor =
+          readVariableConfig(conveyor, QStringLiteral("damperUpSensor"), QStringLiteral("bool"));
+        config.conveyorDamperDownSensor =
+          readVariableConfig(conveyor, QStringLiteral("damperDownSensor"), QStringLiteral("bool"));
         config.robotJobId = readVariableConfig(robot, QStringLiteral("jobId"), QStringLiteral("int32"));
         config.robotActualJobId =
           readVariableConfig(robot, QStringLiteral("actualJobId"), QStringLiteral("int32"));
@@ -216,6 +228,8 @@ namespace backend
         const auto hasConfiguredVariables =
           config.rotaryActualPosition.isConfigured() || config.rotarySensor0.isConfigured() ||
           config.rotarySensor180.isConfigured() || config.conveyorRun.isConfigured() ||
+          config.conveyorDamperMoveUp.isConfigured() || config.conveyorDamperMoveDown.isConfigured() ||
+          config.conveyorDamperUpSensor.isConfigured() || config.conveyorDamperDownSensor.isConfigured() ||
           config.robotJobId.isConfigured() || config.robotActualJobId.isConfigured() ||
           config.robotGripperSensor.isConfigured() ||
           std::ranges::any_of(config.conveyorSensors,
@@ -233,6 +247,14 @@ namespace backend
         }
 
         if (config.conveyorRun.isConfigured() && !config.conveyorRun.hasType(QStringLiteral("bool"))) {
+            co_return;
+        }
+
+        if ((config.conveyorDamperMoveUp.isConfigured() && !config.conveyorDamperMoveUp.isBoolean()) ||
+            (config.conveyorDamperMoveDown.isConfigured() && !config.conveyorDamperMoveDown.isBoolean()) ||
+            (config.conveyorDamperUpSensor.isConfigured() && !config.conveyorDamperUpSensor.isBoolean()) ||
+            (config.conveyorDamperDownSensor.isConfigured() &&
+             !config.conveyorDamperDownSensor.isBoolean())) {
             co_return;
         }
 
@@ -294,6 +316,11 @@ namespace backend
                                                config.conveyorSensors[1].name,
                                                config.conveyorSensors[2].name,
                                                config.conveyorSensors[3].name });
+        m_conveyor->configureDamperVariables(m_sharedAdsSymbolicLink,
+                                             config.conveyorDamperMoveUp.name,
+                                             config.conveyorDamperMoveDown.name,
+                                             config.conveyorDamperUpSensor.name,
+                                             config.conveyorDamperDownSensor.name);
         m_robot->setConveyorBackend(m_conveyor);
         m_robot->setRotaryTableBackend(m_rotaryTable);
         m_robot->configureAds(m_sharedAdsSymbolicLink,

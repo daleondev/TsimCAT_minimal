@@ -10,6 +10,7 @@ Node {
     readonly property real fencePanelWidth: 1000
 
     property bool exitDamperOpen: false
+    property real exitDamperPosition: exitDamperOpen ? 1 : 0
 
     // Common Material for frame/posts
     PrincipledMaterial {
@@ -130,12 +131,12 @@ Node {
     component GuillotineDamper: Node {
         id: guillotineDamper
         property real ratio: 0.6
-        property bool open: false
+        property real positionRatio: 0
 
         // Moving Blade
         Node {
             id: damperBlade
-            y: (1 - guillotineDamper.ratio) * fenceRoot.height + (guillotineDamper.open ? 600 : 0)
+            y: (1 - guillotineDamper.ratio) * fenceRoot.height + guillotineDamper.positionRatio * 600
 
             Behavior on y {
                 NumberAnimation {
@@ -227,7 +228,7 @@ Node {
 
         GuillotineDamper {
             position: Qt.vector3d(0, 0, 0)
-            open: fenceRoot.exitDamperOpen
+            positionRatio: fenceRoot.exitDamperPosition
         }
 
         // Middle area is open

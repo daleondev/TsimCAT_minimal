@@ -27,6 +27,12 @@ namespace backend
 
         Q_PROPERTY(bool partPresent READ partPresent NOTIFY partPresentChanged)
         Q_PROPERTY(double partPosition READ partPosition NOTIFY partPositionChanged)
+        Q_PROPERTY(bool damperOpen READ damperOpen NOTIFY damperOpenChanged)
+        Q_PROPERTY(double damperPosition READ damperPosition NOTIFY damperPositionChanged)
+        Q_PROPERTY(bool damperMovingUpCommand READ damperMovingUpCommand NOTIFY damperCommandsChanged)
+        Q_PROPERTY(bool damperMovingDownCommand READ damperMovingDownCommand NOTIFY damperCommandsChanged)
+        Q_PROPERTY(bool damperUpSensorActive READ damperUpSensorActive NOTIFY damperSensorsChanged)
+        Q_PROPERTY(bool damperDownSensorActive READ damperDownSensorActive NOTIFY damperSensorsChanged)
         Q_PROPERTY(bool running READ running NOTIFY runningChanged)
         Q_PROPERTY(QVariantList sensors READ sensors NOTIFY sensorsChanged)
 
@@ -36,6 +42,12 @@ namespace backend
 
         auto partPresent() const -> bool;
         auto partPosition() const -> double;
+        auto damperOpen() const -> bool;
+        auto damperPosition() const -> double;
+        auto damperMovingUpCommand() const -> bool;
+        auto damperMovingDownCommand() const -> bool;
+        auto damperUpSensorActive() const -> bool;
+        auto damperDownSensorActive() const -> bool;
         auto running() const -> bool;
         auto sensors() const -> QVariantList;
 
@@ -43,6 +55,11 @@ namespace backend
         void subscribeRun(core::link::ISymbolicLink* symbolicLink, const QString& variableName);
         void configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                       const std::array<QString, 4>& variableNames);
+        void configureDamperVariables(core::link::ISymbolicLink* symbolicLink,
+                                      const QString& moveUpVariable,
+                                      const QString& moveDownVariable,
+                                      const QString& upSensorVariable,
+                                      const QString& downSensorVariable);
         auto tryPlacePartFromRobot() -> bool;
         auto tryTakePartAtExit() -> bool;
 
@@ -51,28 +68,50 @@ namespace backend
       signals:
         void partPresentChanged();
         void partPositionChanged();
+        void damperOpenChanged();
+        void damperPositionChanged();
+        void damperCommandsChanged();
+        void damperSensorsChanged();
         void runningChanged();
         void sensorsChanged();
 
       private:
         void launchTask(QCoro::Task<void>&& task);
         void onSimulationTick();
+        void unsubscribe(core::link::Subscription<bool>& subscription);
         void setRunning(bool value);
         void setPartPresentInternal(bool value);
         void setPartPositionInternal(double value);
+        void setDamperMoveUpCommand(bool value);
+        void setDamperMoveDownCommand(bool value);
+        void setDamperPositionInternal(double value);
         void setSensorActiveInternal(int index, bool active);
         void updateSensorsFromPart();
+        void updateDamperSensors();
         auto subscribeRunAsync(QString variableName) -> QCoro::Task<void>;
+        auto subscribeDamperMoveUpAsync(QString variableName) -> QCoro::Task<void>;
+        auto subscribeDamperMoveDownAsync(QString variableName) -> QCoro::Task<void>;
         auto consumeRunAsync() -> QCoro::Task<void>;
+        auto consumeDamperMoveUpAsync() -> QCoro::Task<void>;
+        auto consumeDamperMoveDownAsync() -> QCoro::Task<void>;
         auto writeBoolAsync(QString variableName, bool value) -> QCoro::Task<void>;
 
         bool m_partPresent{ false };
         double m_partPosition{ 0.0 };
+        bool m_damperMoveUpCommand{ false };
+        bool m_damperMoveDownCommand{ false };
+        bool m_damperUpSensorActive{ false };
+        bool m_damperDownSensorActive{ true };
+        double m_damperPosition{ 0.0 };
         bool m_running{ false };
         std::array<bool, 4> m_sensors{ false, false, false, false };
         std::array<QString, 4> m_sensorVariableNames;
+        QString m_damperUpSensorVariableName;
+        QString m_damperDownSensorVariableName;
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
         core::link::Subscription<bool> m_runSubscription;
+        core::link::Subscription<bool> m_damperMoveUpSubscription;
+        core::link::Subscription<bool> m_damperMoveDownSubscription;
         QTimer* m_motionTimer{ nullptr };
         QElapsedTimer m_stepClock;
     };

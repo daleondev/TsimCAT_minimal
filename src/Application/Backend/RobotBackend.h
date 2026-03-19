@@ -48,6 +48,8 @@ namespace backend
       public:
         enum class JobIdType
         {
+            Int8,
+            UInt8,
             Int16,
             UInt16,
             Int32,

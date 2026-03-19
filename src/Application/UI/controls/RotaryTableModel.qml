@@ -121,32 +121,31 @@ Node {
             scale: Qt.vector3d(1.4, 0.8, 1.4)
             materials: [partPaint]
         }
-    }
 
-    // Sensor indicators (like conveyor light barriers)
-    // Part presence sensor — at the load side of the platter
-    Model {
-        source: "#Sphere"
-        position: Qt.vector3d(-rotaryRoot.radius * 0.9, rotaryRoot.height + 40, 0)
-        scale: Qt.vector3d(0.2, 0.2, 0.2)
-        materials: [
-            DefaultMaterial {
-                diffuseColor: rotaryRoot.sensor0Active ? "#e74c3c" : "#2ecc71"
-                emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
-            }
-        ]
-    }
+        // Sensor indicators rotate with the platter so their visual positions stay aligned
+        // with the part stations.
+        Model {
+            source: "#Sphere"
+            position: Qt.vector3d(-rotaryRoot.radius * 0.9, 40, 0)
+            scale: Qt.vector3d(0.2, 0.2, 0.2)
+            materials: [
+                DefaultMaterial {
+                    diffuseColor: rotaryRoot.sensor0Active ? "#e74c3c" : "#2ecc71"
+                    emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
+                }
+            ]
+        }
 
-    // Ready-to-pick sensor
-    Model {
-        source: "#Sphere"
-        position: Qt.vector3d(rotaryRoot.radius * 0.9, rotaryRoot.height + 40, 0)
-        scale: Qt.vector3d(0.2, 0.2, 0.2)
-        materials: [
-            DefaultMaterial {
-                diffuseColor: rotaryRoot.sensor180Active ? "#e74c3c" : "#2ecc71"
-                emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
-            }
-        ]
+        Model {
+            source: "#Sphere"
+            position: Qt.vector3d(rotaryRoot.radius * 0.9, 40, 0)
+            scale: Qt.vector3d(0.2, 0.2, 0.2)
+            materials: [
+                DefaultMaterial {
+                    diffuseColor: rotaryRoot.sensor180Active ? "#e74c3c" : "#2ecc71"
+                    emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
+                }
+            ]
+        }
     }
 }

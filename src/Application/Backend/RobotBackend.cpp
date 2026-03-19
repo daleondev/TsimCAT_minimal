@@ -607,6 +607,19 @@ namespace backend
 
         if (!m_adsConfig.actualJobIdVariable.trimmed().isEmpty()) {
             switch (m_adsConfig.actualJobIdType) {
+                case JobIdType::Int8: {
+                    auto writeResult = co_await toQCoroTask(m_symbolicLink->write(
+                      m_adsConfig.actualJobIdVariable.toStdString(), static_cast<int8_t>(activeJobId)));
+                    (void)writeResult;
+                    break;
+                }
+                case JobIdType::UInt8: {
+                    auto writeResult = co_await toQCoroTask(
+                      m_symbolicLink->write(m_adsConfig.actualJobIdVariable.toStdString(),
+                                            static_cast<uint8_t>(std::max(0, activeJobId))));
+                    (void)writeResult;
+                    break;
+                }
                 case JobIdType::Int16: {
                     auto writeResult = co_await toQCoroTask(m_symbolicLink->write(
                       m_adsConfig.actualJobIdVariable.toStdString(), static_cast<int16_t>(activeJobId)));
@@ -663,6 +676,22 @@ namespace backend
 
         if (m_symbolicLink && !m_adsConfig.jobIdVariable.trimmed().isEmpty()) {
             switch (m_adsConfig.jobIdType) {
+                case JobIdType::Int8: {
+                    const auto result = co_await toQCoroTask(
+                      m_symbolicLink->read<int8_t>(m_adsConfig.jobIdVariable.toStdString()));
+                    if (result) {
+                        requestedJobId = static_cast<int>(result.value());
+                    }
+                    break;
+                }
+                case JobIdType::UInt8: {
+                    const auto result = co_await toQCoroTask(
+                      m_symbolicLink->read<uint8_t>(m_adsConfig.jobIdVariable.toStdString()));
+                    if (result) {
+                        requestedJobId = static_cast<int>(result.value());
+                    }
+                    break;
+                }
                 case JobIdType::Int16: {
                     const auto result = co_await toQCoroTask(
                       m_symbolicLink->read<int16_t>(m_adsConfig.jobIdVariable.toStdString()));

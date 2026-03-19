@@ -46,7 +46,8 @@ namespace backend
 
             auto isIntegerLike() const -> bool
             {
-                return hasType(QStringLiteral("int16")) || hasType(QStringLiteral("uint16")) ||
+                return hasType(QStringLiteral("int8")) || hasType(QStringLiteral("uint8")) ||
+                       hasType(QStringLiteral("int16")) || hasType(QStringLiteral("uint16")) ||
                        hasType(QStringLiteral("int32")) || hasType(QStringLiteral("uint32")) ||
                        hasType(QStringLiteral("int")) || hasType(QStringLiteral("uint"));
             }
@@ -54,6 +55,12 @@ namespace backend
 
         auto toJobIdType(const VariableConfig& config) -> RobotBackend::JobIdType
         {
+            if (config.hasType(QStringLiteral("int8"))) {
+                return RobotBackend::JobIdType::Int8;
+            }
+            if (config.hasType(QStringLiteral("uint8"))) {
+                return RobotBackend::JobIdType::UInt8;
+            }
             if (config.hasType(QStringLiteral("int16"))) {
                 return RobotBackend::JobIdType::Int16;
             }

@@ -15,6 +15,22 @@ namespace
     constexpr double kMovementToleranceDegrees = 0.05;
     constexpr int kSpawnDelayMs = 1000;
 
+    auto normalizeAngleDegrees(double angleDegrees) -> double
+    {
+        auto normalized = std::fmod(angleDegrees, 360.0);
+        if (normalized < 0.0) {
+            normalized += 360.0;
+        }
+
+        return normalized;
+    }
+
+    auto circularDistanceDegrees(double lhs, double rhs) -> double
+    {
+        const auto delta = std::abs(normalizeAngleDegrees(lhs) - normalizeAngleDegrees(rhs));
+        return std::min(delta, 360.0 - delta);
+    }
+
     auto parseActualPositionType(backend::RotaryTableBackend::ActualPositionType type) -> const char*
     {
         switch (type) {
@@ -29,11 +45,13 @@ namespace
 
     auto detectSpawnSide(double rawAngle) -> backend::RotaryTableBackend::SpawnSide
     {
-        if (std::abs(rawAngle) <= kSpawnAngleToleranceDegrees) {
+        const auto normalizedAngle = normalizeAngleDegrees(rawAngle);
+
+        if (circularDistanceDegrees(normalizedAngle, 0.0) <= kSpawnAngleToleranceDegrees) {
             return backend::RotaryTableBackend::SpawnSide::Zero;
         }
 
-        if (std::abs(rawAngle - 180.0) <= kSpawnAngleToleranceDegrees) {
+        if (circularDistanceDegrees(normalizedAngle, 180.0) <= kSpawnAngleToleranceDegrees) {
             return backend::RotaryTableBackend::SpawnSide::OneEighty;
         }
 
@@ -168,7 +186,8 @@ namespace backend
 
     void RotaryTableBackend::updateSpawnState(double rawAngle)
     {
-        const auto candidate = detectSpawnSide(rawAngle);
+        const auto normalizedAngle = normalizeAngleDegrees(rawAngle);
+        const auto candidate = detectSpawnSide(normalizedAngle);
 
         if (candidate == SpawnSide::None) {
             resetPendingSpawn();
@@ -183,13 +202,14 @@ namespace backend
 
         if (m_pendingSpawnSide != candidate) {
             m_pendingSpawnSide = candidate;
-            m_pendingSpawnReferenceAngle = rawAngle;
+            m_pendingSpawnReferenceAngle = normalizedAngle;
             m_spawnTimer->start(kSpawnDelayMs);
             return;
         }
 
-        if (std::abs(rawAngle - m_pendingSpawnReferenceAngle) > kMovementToleranceDegrees) {
-            m_pendingSpawnReferenceAngle = rawAngle;
+        if (circularDistanceDegrees(normalizedAngle, m_pendingSpawnReferenceAngle) >
+            kMovementToleranceDegrees) {
+            m_pendingSpawnReferenceAngle = normalizedAngle;
             m_spawnTimer->start(kSpawnDelayMs);
         }
     }

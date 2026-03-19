@@ -140,8 +140,8 @@ Node {
 
             Behavior on y {
                 NumberAnimation {
-                    duration: 1500
-                    easing.type: Easing.InOutQuad
+                    duration: 800
+                    easing.type: Easing.OutCubic
                 }
             }
 

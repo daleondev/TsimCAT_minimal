@@ -15,7 +15,7 @@ namespace
     constexpr double kPartHalfLength = 70.0;
     constexpr double kPlaceEntryClearance = 160.0;
     constexpr double kConveyorSpeedPerSecond = 220.0;
-    constexpr double kDamperTravelPerSecond = 0.7;
+    constexpr double kDamperTravelPerSecond = 8.0;
     constexpr double kDamperSensorTolerance = 0.001;
 
     template<typename T>

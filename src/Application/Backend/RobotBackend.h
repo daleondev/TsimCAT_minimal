@@ -37,13 +37,6 @@ namespace backend
         Q_PROPERTY(int activeJobId READ activeJobId NOTIFY activeJobIdChanged)
         Q_PROPERTY(bool inMotion READ inMotion NOTIFY inMotionChanged)
         Q_PROPERTY(bool atHome READ atHome NOTIFY atHomeChanged)
-        Q_PROPERTY(bool manualMode READ manualMode NOTIFY manualModeChanged)
-        Q_PROPERTY(double toolX READ toolX NOTIFY toolPoseChanged)
-        Q_PROPERTY(double toolY READ toolY NOTIFY toolPoseChanged)
-        Q_PROPERTY(double toolZ READ toolZ NOTIFY toolPoseChanged)
-        Q_PROPERTY(double toolRollDegrees READ toolRollDegrees NOTIFY toolPoseChanged)
-        Q_PROPERTY(double toolPitchDegrees READ toolPitchDegrees NOTIFY toolPoseChanged)
-        Q_PROPERTY(double toolYawDegrees READ toolYawDegrees NOTIFY toolPoseChanged)
 
       public:
         enum class JobIdType
@@ -82,8 +75,6 @@ namespace backend
             QString gripperSensorVariable;
             JobIdType jobIdType{ JobIdType::Int32 };
             JobIdType actualJobIdType{ JobIdType::Int32 };
-            std::array<QString, 4> areaFreePlcVariables;
-            std::array<QString, 4> areaFreeRobotVariables;
         };
 
         explicit RobotBackend(QObject* parent = nullptr);
@@ -101,28 +92,14 @@ namespace backend
         auto activeJobId() const -> int;
         auto inMotion() const -> bool;
         auto atHome() const -> bool;
-        auto manualMode() const -> bool;
-        auto toolX() const -> double;
-        auto toolY() const -> double;
-        auto toolZ() const -> double;
-        auto toolRollDegrees() const -> double;
-        auto toolPitchDegrees() const -> double;
-        auto toolYawDegrees() const -> double;
 
         void configureAds(core::link::ISymbolicLink* symbolicLink, AdsConfig config);
+        void resetSimulationState();
         void setConveyorBackend(ConveyorBackend* conveyorBackend);
         void setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend);
         void detachSymbolicLink();
 
         Q_INVOKABLE void executeJob(int jobId);
-        Q_INVOKABLE void jogJoint(int axisIndex, double deltaDegrees);
-        Q_INVOKABLE bool jogCartesian(double deltaX,
-                                      double deltaY,
-                                      double deltaZ,
-                                      double deltaRollDegrees,
-                                      double deltaPitchDegrees,
-                                      double deltaYawDegrees);
-        Q_INVOKABLE void setManualMode(bool enabled);
 
       signals:
         void axis1Changed();
@@ -137,13 +114,11 @@ namespace backend
         void activeJobIdChanged();
         void inMotionChanged();
         void atHomeChanged();
-        void manualModeChanged();
-        void toolPoseChanged();
 
       private:
         void launchTask(QCoro::Task<void>&& task);
         void startAdsPoll();
-        void applyAdsInputs(int requestedJobId, const std::array<bool, 4>& plcAreas);
+        void applyAdsInputs(int requestedJobId);
         void onSimulationTick();
         void setAxisValues(const std::array<double, 6>& jointsDegrees);
         void setGripperGripped(bool value);
@@ -152,19 +127,19 @@ namespace backend
         void setActiveJobId(int value);
         void setInMotion(bool value);
         void setAtHome(bool value);
-        void updateToolPose();
-        void updateRobotAreaState();
         void scheduleAdsStatusWrite();
+        void startAdsStatusWrite();
         void applySequenceAction(SequenceAction action);
         void processPendingActions();
         void completeCurrentMotion();
         auto moveToPoseSequence(const std::vector<SequenceStep>& steps) -> bool;
-        auto moveToJointTarget(const std::array<double, 6>& jointsDegrees) -> bool;
         auto planTrajectory(const std::array<double, 6>& startJoints,
                             const std::array<double, 6>& targetJoints) const
           -> std::vector<std::array<double, 6>>;
-        auto writeStatusAsync(int activeJobId, std::array<bool, 4> areaFreeRobot) -> QCoro::Task<void>;
-        auto pollAdsInputsAsync() -> QCoro::Task<void>;
+        auto flushAdsStatusAsync() -> QCoro::Task<void>;
+        auto writeStatusAsync(int activeJobId, bool gripperSensorActive, size_t adsGeneration)
+          -> QCoro::Task<void>;
+        auto pollAdsInputsAsync(size_t adsGeneration) -> QCoro::Task<void>;
 
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
         ConveyorBackend* m_conveyorBackend{ nullptr };
@@ -175,10 +150,10 @@ namespace backend
         QTimer* m_adsPollTimer{ nullptr };
         QElapsedTimer m_stepClock;
         bool m_adsPollInFlight{ false };
+        bool m_adsStatusWriteInFlight{ false };
+        bool m_adsStatusWritePending{ false };
+        size_t m_adsGeneration{ 0 };
         std::array<double, 6> m_jointAnglesDegrees{ 0.0, -90.0, 90.0, 0.0, 0.0, 0.0 };
-        std::array<bool, 4> m_areaFreePlc{ true, true, true, true };
-        std::array<bool, 4> m_areaFreeRobot{ true, true, true, true };
-        RobotPose m_toolPose{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
         struct PendingAction
         {
@@ -196,6 +171,5 @@ namespace backend
         bool m_gripperSensorBlocked{ false };
         bool m_inMotion{ false };
         bool m_atHome{ true };
-        bool m_manualMode{ false };
     };
 }

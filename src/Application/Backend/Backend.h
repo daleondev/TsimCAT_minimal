@@ -42,6 +42,9 @@ namespace backend
         auto rotaryTable() const -> RotaryTableBackend*;
         QString welcomeMessage() const;
 
+        Q_INVOKABLE void resetSimulationState();
+        Q_INVOKABLE void resyncAds();
+
       private:
         struct SharedAdsConfig;
 

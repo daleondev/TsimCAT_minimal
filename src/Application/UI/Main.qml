@@ -33,10 +33,6 @@ ApplicationWindow {
                     icon: "DashboardIcon"
                 },
                 {
-                    name: "Robot Status",
-                    icon: "RobotIcon"
-                },
-                {
                     name: "ADS Config",
                     icon: "AdsIcon"
                 }
@@ -51,9 +47,6 @@ ApplicationWindow {
             currentIndex: sidebar.currentIndex
 
             Subscreens.PlantOverview {
-                backend: backend
-            }
-            Subscreens.RobotStatus {
                 backend: backend
             }
             Subscreens.AdsConfig {

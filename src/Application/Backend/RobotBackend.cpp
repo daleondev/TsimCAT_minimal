@@ -112,12 +112,10 @@ namespace
 
         switch (jobId) {
             case 1:
-                return { poseStep(home) };
-            case 2:
                 return {
                     poseStep(home), poseStep(pickTable), actionStep(SequenceAction::Pick), poseStep(home)
                 };
-            case 5:
+            case 2:
                 return {
                     poseStep(home), poseStep(placeConveyor), actionStep(SequenceAction::Place), poseStep(home)
                 };
@@ -135,7 +133,6 @@ namespace backend
       , m_adsPollTimer(new QTimer(this))
     {
         m_stepClock.start();
-        updateToolPose();
 
         m_simulationTimer->setInterval(16);
         connect(m_simulationTimer, &QTimer::timeout, this, &RobotBackend::onSimulationTick);
@@ -159,13 +156,6 @@ namespace backend
     auto RobotBackend::activeJobId() const -> int { return m_activeJobId; }
     auto RobotBackend::inMotion() const -> bool { return m_inMotion; }
     auto RobotBackend::atHome() const -> bool { return m_atHome; }
-    auto RobotBackend::manualMode() const -> bool { return m_manualMode; }
-    auto RobotBackend::toolX() const -> double { return m_toolPose.x; }
-    auto RobotBackend::toolY() const -> double { return m_toolPose.y; }
-    auto RobotBackend::toolZ() const -> double { return m_toolPose.z; }
-    auto RobotBackend::toolRollDegrees() const -> double { return radiansToDegrees(m_toolPose.roll); }
-    auto RobotBackend::toolPitchDegrees() const -> double { return radiansToDegrees(m_toolPose.pitch); }
-    auto RobotBackend::toolYawDegrees() const -> double { return radiansToDegrees(m_toolPose.yaw); }
 
     void RobotBackend::configureAds(core::link::ISymbolicLink* symbolicLink, AdsConfig config)
     {
@@ -182,6 +172,20 @@ namespace backend
         }
     }
 
+    void RobotBackend::resetSimulationState()
+    {
+        m_currentTrajectory.clear();
+        m_pendingActions.clear();
+        m_trajectoryStep = 0;
+        m_lastProcessedAdsJobId = 0;
+        setInMotion(false);
+        setActiveJobId(0);
+        setGripperGripped(false);
+        setCarriedPartVisible(false);
+        setGripperSensorBlocked(false);
+        setAtHome(isHomeConfiguration(m_jointAnglesDegrees));
+    }
+
     void RobotBackend::setConveyorBackend(ConveyorBackend* conveyorBackend)
     {
         m_conveyorBackend = conveyorBackend;
@@ -196,6 +200,9 @@ namespace backend
     {
         m_adsPollTimer->stop();
         m_adsPollInFlight = false;
+        m_adsStatusWriteInFlight = false;
+        m_adsStatusWritePending = false;
+        ++m_adsGeneration;
         m_symbolicLink = nullptr;
     }
 
@@ -209,64 +216,11 @@ namespace backend
         m_currentTrajectory.clear();
         m_pendingActions.clear();
         m_trajectoryStep = 0;
-        setManualMode(false);
 
         if (moveToPoseSequence(poses)) {
             setActiveJobId(jobId);
             setInMotion(true);
         }
-    }
-
-    void RobotBackend::jogJoint(int axisIndex, double deltaDegrees)
-    {
-        if (axisIndex < 0 || axisIndex >= static_cast<int>(m_jointAnglesDegrees.size())) {
-            return;
-        }
-
-        std::array<double, 6> target = m_jointAnglesDegrees;
-        target[static_cast<size_t>(axisIndex)] = normalizeJointToBounds(
-          target[static_cast<size_t>(axisIndex)] + deltaDegrees, static_cast<size_t>(axisIndex));
-
-        setManualMode(true);
-        if (moveToJointTarget(target)) {
-            setActiveJobId(0);
-            setInMotion(true);
-        }
-    }
-
-    bool RobotBackend::jogCartesian(double deltaX,
-                                    double deltaY,
-                                    double deltaZ,
-                                    double deltaRollDegrees,
-                                    double deltaPitchDegrees,
-                                    double deltaYawDegrees)
-    {
-        auto target = m_toolPose;
-        target.x += deltaX;
-        target.y += deltaY;
-        target.z += deltaZ;
-        target.roll += degreesToRadians(deltaRollDegrees);
-        target.pitch += degreesToRadians(deltaPitchDegrees);
-        target.yaw += degreesToRadians(deltaYawDegrees);
-
-        setManualMode(true);
-        if (!moveToPoseSequence({ SequenceStep{ .kind = SequenceStep::Kind::Pose, .pose = target } })) {
-            return false;
-        }
-
-        setActiveJobId(0);
-        setInMotion(true);
-        return true;
-    }
-
-    void RobotBackend::setManualMode(bool enabled)
-    {
-        if (m_manualMode == enabled) {
-            return;
-        }
-
-        m_manualMode = enabled;
-        emit manualModeChanged();
     }
 
     void RobotBackend::launchTask(QCoro::Task<void>&& task)
@@ -282,19 +236,17 @@ namespace backend
         }
 
         m_adsPollInFlight = true;
-        launchTask(pollAdsInputsAsync());
+        launchTask(pollAdsInputsAsync(m_adsGeneration));
     }
 
-    void RobotBackend::applyAdsInputs(int requestedJobId, const std::array<bool, 4>& plcAreas)
+    void RobotBackend::applyAdsInputs(int requestedJobId)
     {
-        m_areaFreePlc = plcAreas;
-
         if (requestedJobId <= 0) {
             m_lastProcessedAdsJobId = 0;
             return;
         }
 
-        if (m_manualMode || requestedJobId == m_lastProcessedAdsJobId || m_inMotion) {
+        if (requestedJobId == m_lastProcessedAdsJobId || m_inMotion) {
             return;
         }
 
@@ -368,7 +320,6 @@ namespace backend
             emit axis6Changed();
         }
 
-        updateToolPose();
         setAtHome(isHomeConfiguration(m_jointAnglesDegrees));
     }
 
@@ -422,7 +373,6 @@ namespace backend
 
         m_inMotion = value;
         emit inMotionChanged();
-        updateRobotAreaState();
     }
 
     void RobotBackend::setAtHome(bool value)
@@ -435,31 +385,28 @@ namespace backend
         emit atHomeChanged();
     }
 
-    void RobotBackend::updateToolPose()
-    {
-        m_toolPose = m_kinematics.forward(jointsToRadians(m_jointAnglesDegrees));
-        emit toolPoseChanged();
-    }
-
-    void RobotBackend::updateRobotAreaState()
-    {
-        const auto nextValue = !m_inMotion;
-        if (m_areaFreeRobot == std::array<bool, 4>{ nextValue, nextValue, nextValue, nextValue }) {
-            scheduleAdsStatusWrite();
-            return;
-        }
-
-        m_areaFreeRobot = { nextValue, nextValue, nextValue, nextValue };
-        scheduleAdsStatusWrite();
-    }
-
     void RobotBackend::scheduleAdsStatusWrite()
     {
         if (!m_symbolicLink) {
             return;
         }
 
-        launchTask(writeStatusAsync(m_activeJobId, m_areaFreeRobot));
+        m_adsStatusWritePending = true;
+        if (m_adsStatusWriteInFlight) {
+            return;
+        }
+
+        startAdsStatusWrite();
+    }
+
+    void RobotBackend::startAdsStatusWrite()
+    {
+        if (!m_symbolicLink || m_adsStatusWriteInFlight || !m_adsStatusWritePending) {
+            return;
+        }
+
+        m_adsStatusWriteInFlight = true;
+        launchTask(flushAdsStatusAsync());
     }
 
     void RobotBackend::applySequenceAction(SequenceAction action)
@@ -554,18 +501,6 @@ namespace backend
         return true;
     }
 
-    auto RobotBackend::moveToJointTarget(const std::array<double, 6>& jointsDegrees) -> bool
-    {
-        auto trajectory = planTrajectory(m_jointAnglesDegrees, jointsDegrees);
-        if (trajectory.empty()) {
-            return false;
-        }
-
-        m_currentTrajectory = std::move(trajectory);
-        m_trajectoryStep = 0;
-        return true;
-    }
-
     auto RobotBackend::planTrajectory(const std::array<double, 6>& startJoints,
                                       const std::array<double, 6>& targetJoints) const
       -> std::vector<std::array<double, 6>>
@@ -598,10 +533,30 @@ namespace backend
         return trajectory;
     }
 
-    auto RobotBackend::writeStatusAsync(int activeJobId, std::array<bool, 4> areaFreeRobot)
+    auto RobotBackend::flushAdsStatusAsync() -> QCoro::Task<void>
+    {
+        while (m_symbolicLink && m_adsStatusWritePending) {
+            m_adsStatusWritePending = false;
+            const auto activeJobId = m_activeJobId;
+            const auto gripperSensorActive = m_gripperGripped;
+            const auto adsGeneration = m_adsGeneration;
+
+            co_await writeStatusAsync(activeJobId, gripperSensorActive, adsGeneration);
+        }
+
+        m_adsStatusWriteInFlight = false;
+
+        if (m_symbolicLink && m_adsStatusWritePending) {
+            startAdsStatusWrite();
+        }
+
+        co_return;
+    }
+
+    auto RobotBackend::writeStatusAsync(int activeJobId, bool gripperSensorActive, size_t adsGeneration)
       -> QCoro::Task<void>
     {
-        if (!m_symbolicLink) {
+        if (!m_symbolicLink || adsGeneration != m_adsGeneration) {
             co_return;
         }
 
@@ -649,30 +604,22 @@ namespace backend
             }
         }
 
-        if (!m_adsConfig.gripperSensorVariable.trimmed().isEmpty()) {
-            auto writeResult = co_await toQCoroTask(
-              m_symbolicLink->write(m_adsConfig.gripperSensorVariable.toStdString(), m_gripperGripped));
-            (void)writeResult;
+        if (adsGeneration != m_adsGeneration) {
+            co_return;
         }
 
-        for (size_t index = 0; index < m_adsConfig.areaFreeRobotVariables.size(); ++index) {
-            const auto& variableName = m_adsConfig.areaFreeRobotVariables[index];
-            if (variableName.trimmed().isEmpty()) {
-                continue;
-            }
-
-            auto writeResult =
-              co_await toQCoroTask(m_symbolicLink->write(variableName.toStdString(), areaFreeRobot[index]));
+        if (!m_adsConfig.gripperSensorVariable.trimmed().isEmpty()) {
+            auto writeResult = co_await toQCoroTask(
+              m_symbolicLink->write(m_adsConfig.gripperSensorVariable.toStdString(), gripperSensorActive));
             (void)writeResult;
         }
 
         co_return;
     }
 
-    auto RobotBackend::pollAdsInputsAsync() -> QCoro::Task<void>
+    auto RobotBackend::pollAdsInputsAsync(size_t adsGeneration) -> QCoro::Task<void>
     {
         int requestedJobId = 0;
-        std::array<bool, 4> plcAreas = m_areaFreePlc;
 
         if (m_symbolicLink && !m_adsConfig.jobIdVariable.trimmed().isEmpty()) {
             switch (m_adsConfig.jobIdType) {
@@ -727,21 +674,13 @@ namespace backend
             }
         }
 
-        for (size_t index = 0; index < m_adsConfig.areaFreePlcVariables.size(); ++index) {
-            const auto& variableName = m_adsConfig.areaFreePlcVariables[index];
-            if (variableName.trimmed().isEmpty()) {
-                continue;
+        QMetaObject::invokeMethod(this, [this, adsGeneration, requestedJobId]() {
+            if (adsGeneration != m_adsGeneration) {
+                return;
             }
 
-            const auto result = co_await toQCoroTask(m_symbolicLink->read<bool>(variableName.toStdString()));
-            if (result) {
-                plcAreas[index] = result.value();
-            }
-        }
-
-        QMetaObject::invokeMethod(this, [this, requestedJobId, plcAreas]() {
             m_adsPollInFlight = false;
-            applyAdsInputs(requestedJobId, plcAreas);
+            applyAdsInputs(requestedJobId);
         }, Qt::QueuedConnection);
 
         co_return;

@@ -9,6 +9,7 @@ Node {
     property real height: 800
     property bool partPresent: false
     property real partPosition: 0
+    property var partPositions: []
     property bool running: false
     property var sensors: [false, false, false, false]
 
@@ -77,20 +78,25 @@ Node {
                 scale: Qt.vector3d(0.2, 0.2, 0.2)
                 materials: [
                     DefaultMaterial {
-                        diffuseColor: conveyorRoot.sensors[sensorNode.index] ? "#e74c3c" : "#2ecc71"
-                        emissiveFactor: Qt.vector3d(diffuseColor.r, diffuseColor.g, diffuseColor.b)
+                        readonly property color activeColor: "#e74c3c"
+                        readonly property color inactiveColor: "#3a4348"
+                        diffuseColor: conveyorRoot.sensors[sensorNode.index] ? activeColor : inactiveColor
+                        emissiveFactor: conveyorRoot.sensors[sensorNode.index] ? Qt.vector3d(activeColor.r, activeColor.g, activeColor.b) : Qt.vector3d(0, 0, 0)
                     }
                 ]
             }
         }
     }
 
-    PartModel {
-        visible: conveyorRoot.partPresent
-        position: Qt.vector3d(conveyorRoot.partPosition - conveyorRoot.length / 2, conveyorRoot.height + 10, 0)
-        width: 140
-        length: 140
-        height: 80
-        color: "#a6adb3"
+    Repeater3D {
+        model: conveyorRoot.partPositions.length
+        delegate: PartModel {
+            required property int index
+            position: Qt.vector3d(conveyorRoot.partPositions[index] - conveyorRoot.length / 2, conveyorRoot.height + 10, 0)
+            width: 140
+            length: 140
+            height: 80
+            color: "#a6adb3"
+        }
     }
 }

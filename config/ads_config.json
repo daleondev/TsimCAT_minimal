@@ -63,44 +63,12 @@
                 "name": "Robot (EL6631).krc4_Outputs.krc4_SubmoduleData_1[0]",
                 "type": "uint8"
             },
-            "areaFreePLC1": {
-                "name": "Robot (EL6631).krc4_Outputs.krc4_SubmoduleData_1[1]",
-                "type": "bool"
-            },
-            "areaFreePLC2": {
-                "name": "Robot (EL6631).krc4_Outputs.krc4_SubmoduleData_1[2]",
-                "type": "bool"
-            },
-            "areaFreePLC3": {
-                "name": "Robot (EL6631).krc4_Outputs.krc4_SubmoduleData_1[3]",
-                "type": "bool"
-            },
-            "areaFreePLC4": {
-                "name": "Robot (EL6631).krc4_Outputs.krc4_SubmoduleData_1[4]",
-                "type": "bool"
-            },
             "actualJobId": {
                 "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[0]",
                 "type": "uint8"
             },
-            "areaFreeRobot1": {
-                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[1]",
-                "type": "bool"
-            },
-            "areaFreeRobot2": {
-                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[2]",
-                "type": "bool"
-            },
-            "areaFreeRobot3": {
-                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[3]",
-                "type": "bool"
-            },
-            "areaFreeRobot4": {
-                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[4]",
-                "type": "bool"
-            },
             "gripperSensor": {
-                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[5]",
+                "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[1]",
                 "type": "bool"
             }
         }

@@ -101,8 +101,6 @@ namespace backend
         VariableConfig robotJobId;
         VariableConfig robotActualJobId;
         VariableConfig robotGripperSensor;
-        std::array<VariableConfig, 4> robotAreaFreePlc;
-        std::array<VariableConfig, 4> robotAreaFreeRobot;
     };
 
     Backend::Backend(QObject* parent)
@@ -137,6 +135,27 @@ namespace backend
     auto Backend::rotaryTable() const -> RotaryTableBackend* { return m_rotaryTable; }
 
     QString Backend::welcomeMessage() const { return QStringLiteral("Hello from C++ Backend!"); }
+
+    void Backend::resetSimulationState()
+    {
+        if (m_robot) {
+            m_robot->resetSimulationState();
+        }
+
+        if (m_conveyor) {
+            m_conveyor->resetSimulationState();
+        }
+
+        if (m_rotaryTable) {
+            m_rotaryTable->resetSimulationState();
+        }
+    }
+
+    void Backend::resyncAds()
+    {
+        resetSimulationState();
+        launchTask(initializeSharedAdsLinkAsync());
+    }
 
     void Backend::launchTask(QCoro::Task<void>&& task)
     {
@@ -212,18 +231,6 @@ namespace backend
           readVariableConfig(robot, QStringLiteral("actualJobId"), QStringLiteral("int32"));
         config.robotGripperSensor =
           readVariableConfig(robot, QStringLiteral("gripperSensor"), QStringLiteral("bool"));
-        config.robotAreaFreePlc = {
-            readVariableConfig(robot, QStringLiteral("areaFreePLC1"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreePLC2"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreePLC3"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreePLC4"), QStringLiteral("bool"))
-        };
-        config.robotAreaFreeRobot = {
-            readVariableConfig(robot, QStringLiteral("areaFreeRobot1"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreeRobot2"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreeRobot3"), QStringLiteral("bool")),
-            readVariableConfig(robot, QStringLiteral("areaFreeRobot4"), QStringLiteral("bool"))
-        };
 
         return config;
     }
@@ -231,6 +238,25 @@ namespace backend
     auto Backend::initializeSharedAdsLinkAsync() -> QCoro::Task<void>
     {
         const auto config = loadSharedAdsConfig();
+
+        if (m_rotaryTable) {
+            m_rotaryTable->detachSymbolicLink();
+        }
+        if (m_conveyor) {
+            m_conveyor->detachSymbolicLink();
+        }
+        if (m_robot) {
+            m_robot->detachSymbolicLink();
+        }
+
+        if (m_sharedAdsLink) {
+            if (auto* client = m_sharedAdsLink->asClient()) {
+                (void)co_await toQCoroTask(client->disconnect());
+            }
+
+            m_sharedAdsSymbolicLink = nullptr;
+            m_sharedAdsLink.reset();
+        }
 
         const auto hasConfiguredVariables =
           config.rotaryActualPosition.isConfigured() || config.rotarySensor0.isConfigured() ||
@@ -240,10 +266,6 @@ namespace backend
           config.robotJobId.isConfigured() || config.robotActualJobId.isConfigured() ||
           config.robotGripperSensor.isConfigured() ||
           std::ranges::any_of(config.conveyorSensors,
-                              [](const auto& variable) { return variable.isConfigured(); }) ||
-          std::ranges::any_of(config.robotAreaFreePlc,
-                              [](const auto& variable) { return variable.isConfigured(); }) ||
-          std::ranges::any_of(config.robotAreaFreeRobot,
                               [](const auto& variable) { return variable.isConfigured(); });
         if (!hasConfiguredVariables) {
             co_return;
@@ -274,18 +296,6 @@ namespace backend
         }
 
         if (config.robotGripperSensor.isConfigured() && !config.robotGripperSensor.isBoolean()) {
-            co_return;
-        }
-
-        if (std::ranges::any_of(config.robotAreaFreePlc, [](const auto& variable) {
-            return variable.isConfigured() && !variable.isBoolean();
-        })) {
-            co_return;
-        }
-
-        if (std::ranges::any_of(config.robotAreaFreeRobot, [](const auto& variable) {
-            return variable.isConfigured() && !variable.isBoolean();
-        })) {
             co_return;
         }
 
@@ -330,26 +340,15 @@ namespace backend
                                              config.conveyorDamperDownSensor.name);
         m_robot->setConveyorBackend(m_conveyor);
         m_robot->setRotaryTableBackend(m_rotaryTable);
-        m_robot->configureAds(m_sharedAdsSymbolicLink,
-                                                            RobotBackend::AdsConfig{ .jobIdVariable = config.robotJobId.name,
-                                                                                                             .actualJobIdVariable = config.robotActualJobId.name,
-                                                                                                             .gripperSensorVariable =
-                                                                                                                 config.robotGripperSensor.name,
-                                                                                                             .jobIdType = toJobIdType(config.robotJobId),
-                                                                                                             .actualJobIdType =
-                                                                                                                 toJobIdType(config.robotActualJobId),
-                                                                                                             .areaFreePlcVariables = {
-                                                                                                                     config.robotAreaFreePlc[0].name,
-                                                                                                                     config.robotAreaFreePlc[1].name,
-                                                                                                                     config.robotAreaFreePlc[2].name,
-                                                                                                                     config.robotAreaFreePlc[3].name,
-                                                                                                             },
-                                                                                                             .areaFreeRobotVariables = {
-                                                                                                                     config.robotAreaFreeRobot[0].name,
-                                                                                                                     config.robotAreaFreeRobot[1].name,
-                                                                                                                     config.robotAreaFreeRobot[2].name,
-                                                                                                                     config.robotAreaFreeRobot[3].name,
-                                                                                                             } });
+        m_robot->configureAds(
+          m_sharedAdsSymbolicLink,
+          RobotBackend::AdsConfig{ .jobIdVariable = config.robotJobId.name,
+                                   .actualJobIdVariable = config.robotActualJobId.name,
+                                   .gripperSensorVariable = config.robotGripperSensor.name,
+                                   .jobIdType = toJobIdType(config.robotJobId),
+                                   .actualJobIdType = toJobIdType(config.robotActualJobId) });
+
+        resetSimulationState();
 
         if (config.rotaryActualPosition.isConfigured()) {
             const auto actualPositionType = config.rotaryActualPosition.hasType(QStringLiteral("float"))

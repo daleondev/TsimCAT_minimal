@@ -11,6 +11,7 @@
 #include <QtQml/qqmlregistration.h>
 
 #include <array>
+#include <vector>
 
 namespace core::link
 {
@@ -27,6 +28,7 @@ namespace backend
 
         Q_PROPERTY(bool partPresent READ partPresent NOTIFY partPresentChanged)
         Q_PROPERTY(double partPosition READ partPosition NOTIFY partPositionChanged)
+        Q_PROPERTY(QVariantList partPositions READ partPositions NOTIFY partPositionsChanged)
         Q_PROPERTY(bool damperOpen READ damperOpen NOTIFY damperOpenChanged)
         Q_PROPERTY(double damperPosition READ damperPosition NOTIFY damperPositionChanged)
         Q_PROPERTY(bool damperMovingUpCommand READ damperMovingUpCommand NOTIFY damperCommandsChanged)
@@ -42,6 +44,7 @@ namespace backend
 
         auto partPresent() const -> bool;
         auto partPosition() const -> double;
+        auto partPositions() const -> QVariantList;
         auto damperOpen() const -> bool;
         auto damperPosition() const -> double;
         auto damperMovingUpCommand() const -> bool;
@@ -52,6 +55,7 @@ namespace backend
         auto sensors() const -> QVariantList;
 
         void detachSymbolicLink();
+        void resetSimulationState();
         void subscribeRun(core::link::ISymbolicLink* symbolicLink, const QString& variableName);
         void configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                       const std::array<QString, 4>& variableNames);
@@ -68,6 +72,7 @@ namespace backend
       signals:
         void partPresentChanged();
         void partPositionChanged();
+        void partPositionsChanged();
         void damperOpenChanged();
         void damperPositionChanged();
         void damperCommandsChanged();
@@ -79,15 +84,19 @@ namespace backend
         void launchTask(QCoro::Task<void>&& task);
         void onSimulationTick();
         void unsubscribe(core::link::Subscription<bool>& subscription);
+        void syncPartStateSignals(bool hadParts, double previousLeadPosition);
+        void scheduleSensorOutputsWrite();
+        void startSensorOutputsWrite();
         void setRunning(bool value);
-        void setPartPresentInternal(bool value);
-        void setPartPositionInternal(double value);
         void setDamperMoveUpCommand(bool value);
         void setDamperMoveDownCommand(bool value);
         void setDamperPositionInternal(double value);
         void setSensorActiveInternal(int index, bool active);
+        void publishSensorOutputs();
+        void publishDamperSensorOutputs();
         void updateSensorsFromPart();
         void updateDamperSensors();
+        auto flushSensorOutputsAsync() -> QCoro::Task<void>;
         auto subscribeRunAsync(QString variableName) -> QCoro::Task<void>;
         auto subscribeDamperMoveUpAsync(QString variableName) -> QCoro::Task<void>;
         auto subscribeDamperMoveDownAsync(QString variableName) -> QCoro::Task<void>;
@@ -96,8 +105,7 @@ namespace backend
         auto consumeDamperMoveDownAsync() -> QCoro::Task<void>;
         auto writeBoolAsync(QString variableName, bool value) -> QCoro::Task<void>;
 
-        bool m_partPresent{ false };
-        double m_partPosition{ 0.0 };
+        std::vector<double> m_partPositions;
         bool m_damperMoveUpCommand{ false };
         bool m_damperMoveDownCommand{ false };
         bool m_damperUpSensorActive{ false };
@@ -112,6 +120,9 @@ namespace backend
         core::link::Subscription<bool> m_runSubscription;
         core::link::Subscription<bool> m_damperMoveUpSubscription;
         core::link::Subscription<bool> m_damperMoveDownSubscription;
+        bool m_sensorOutputsWriteInFlight{ false };
+        bool m_sensorOutputsWritePending{ false };
+        size_t m_symbolicLinkGeneration{ 0 };
         QTimer* m_motionTimer{ nullptr };
         QElapsedTimer m_stepClock;
     };

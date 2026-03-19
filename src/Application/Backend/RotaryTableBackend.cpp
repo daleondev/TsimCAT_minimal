@@ -104,6 +104,13 @@ namespace backend
         m_symbolicLink = nullptr;
     }
 
+    void RotaryTableBackend::resetSimulationState()
+    {
+        resetPendingSpawn();
+        setPart0Present(false);
+        setPart180Present(false);
+    }
+
     void RotaryTableBackend::subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
                                                      const QString& variableName,
                                                      ActualPositionType variableType)

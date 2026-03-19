@@ -22,7 +22,6 @@ qt_add_qml_module(TsimCAT_UI
         icons/RobotIcon.qml
         icons/AdsIcon.qml
         subscreens/PlantOverview.qml
-        subscreens/RobotStatus.qml
         subscreens/AdsConfig.qml
     RESOURCES
         qtquickcontrols2.conf

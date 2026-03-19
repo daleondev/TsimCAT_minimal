@@ -53,6 +53,7 @@ namespace backend
         auto sensor180Active() const -> bool;
 
         void detachSymbolicLink();
+        void resetSimulationState();
         void subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
                                      const QString& variableName,
                                      ActualPositionType variableType);

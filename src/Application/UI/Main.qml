@@ -10,7 +10,7 @@ ApplicationWindow {
     width: 1280
     height: 720
     visible: true
-    title: qsTr("TsimCAT Control Center")
+    title: qsTr("Simulation")
 
     BackendModule.Backend {
         id: backend
@@ -25,7 +25,7 @@ ApplicationWindow {
             id: sidebar
             Layout.fillHeight: true
             Layout.preferredWidth: 240
-            footerText: "© 2026 TsimCAT"
+            footerText: "© 2026 Simulation"
 
             model: [
                 {

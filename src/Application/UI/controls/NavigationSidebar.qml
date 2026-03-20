@@ -8,7 +8,7 @@ Rectangle {
     
     property alias model: repeater.model
     property int currentIndex: 0
-    property string title: "TsimCAT"
+    property string title: "Simulation"
     property string footerText: ""
 
     color: "#2c3e50"

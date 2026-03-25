@@ -5,14 +5,14 @@ import QtQuick.Layouts
 
 Rectangle {
     id: root
-    
+
     property alias model: repeater.model
     property int currentIndex: 0
     property string title: "Simulation"
     property string footerText: ""
 
     color: "#2c3e50"
-    
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 10
@@ -30,7 +30,7 @@ Rectangle {
 
         Repeater {
             id: repeater
-            
+
             delegate: Button {
                 id: navButton
                 required property int index
@@ -40,23 +40,23 @@ Rectangle {
                 flat: true
                 text: modelData.name
                 highlighted: root.currentIndex === index
-                
+
                 contentItem: RowLayout {
                     spacing: 15
-                    
+
                     Item {
                         Layout.preferredWidth: 24
                         Layout.preferredHeight: 24
                         Layout.leftMargin: 10
-                        
+
                         Loader {
                             id: iconLoader
                             anchors.centerIn: parent
                             source: "../icons/" + navButton.modelData.icon + ".qml"
-                            
+
                             // Define the target color on the loader
                             property color targetColor: navButton.highlighted ? "#3498db" : "white"
-                            
+
                             // Use Binding to safely push the color to the loaded item
                             Binding {
                                 target: iconLoader.item
@@ -85,7 +85,9 @@ Rectangle {
             }
         }
 
-        Item { Layout.fillHeight: true } // Spacer
+        Item {
+            Layout.fillHeight: true
+        } // Spacer
 
         Text {
             text: root.footerText

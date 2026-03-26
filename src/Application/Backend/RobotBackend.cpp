@@ -178,12 +178,44 @@ namespace backend
         m_pendingActions.clear();
         m_trajectoryStep = 0;
         m_lastProcessedAdsJobId = 0;
+        setAxisValues(kHomeJointsDegrees);
         setInMotion(false);
         setActiveJobId(0);
         setGripperGripped(false);
         setCarriedPartVisible(false);
         setGripperSensorBlocked(false);
-        setAtHome(isHomeConfiguration(m_jointAnglesDegrees));
+        setAtHome(true);
+    }
+
+    void RobotBackend::setSimulationEnabled(bool enabled)
+    {
+        if (m_simulationEnabled == enabled) {
+            return;
+        }
+
+        m_simulationEnabled = enabled;
+
+        if (!m_simulationEnabled) {
+            m_currentTrajectory.clear();
+            m_pendingActions.clear();
+            m_trajectoryStep = 0;
+            m_lastProcessedAdsJobId = 0;
+            setInMotion(false);
+            setActiveJobId(0);
+        }
+    }
+
+    auto RobotBackend::pollAdsStateOnce() -> QCoro::Task<void>
+    {
+        if (!m_symbolicLink) {
+            co_return;
+        }
+
+        const auto requestedJobId = co_await readRequestedJobIdAsync();
+        QMetaObject::invokeMethod(
+          this, [this, requestedJobId]() { applyAdsInputs(requestedJobId); }, Qt::QueuedConnection);
+
+        co_return;
     }
 
     void RobotBackend::setConveyorBackend(ConveyorBackend* conveyorBackend)
@@ -208,6 +240,10 @@ namespace backend
 
     void RobotBackend::executeJob(int jobId)
     {
+        if (!m_simulationEnabled) {
+            return;
+        }
+
         const auto poses = jobPoses(jobId);
         if (poses.empty()) {
             return;
@@ -241,6 +277,11 @@ namespace backend
 
     void RobotBackend::applyAdsInputs(int requestedJobId)
     {
+        if (!m_simulationEnabled) {
+            m_lastProcessedAdsJobId = 0;
+            return;
+        }
+
         if (requestedJobId <= 0) {
             m_lastProcessedAdsJobId = 0;
             return;
@@ -258,6 +299,10 @@ namespace backend
     {
         const auto elapsedMs = static_cast<double>(m_stepClock.restart());
         const auto deltaSeconds = std::max(0.001, elapsedMs / 1000.0);
+
+        if (!m_simulationEnabled) {
+            return;
+        }
 
         if (!m_inMotion || m_currentTrajectory.empty()) {
             return;
@@ -619,6 +664,22 @@ namespace backend
 
     auto RobotBackend::pollAdsInputsAsync(size_t adsGeneration) -> QCoro::Task<void>
     {
+        const auto requestedJobId = co_await readRequestedJobIdAsync();
+
+        QMetaObject::invokeMethod(this, [this, adsGeneration, requestedJobId]() {
+            if (adsGeneration != m_adsGeneration) {
+                return;
+            }
+
+            m_adsPollInFlight = false;
+            applyAdsInputs(requestedJobId);
+        }, Qt::QueuedConnection);
+
+        co_return;
+    }
+
+    auto RobotBackend::readRequestedJobIdAsync() -> QCoro::Task<int>
+    {
         int requestedJobId = 0;
 
         if (m_symbolicLink && !m_adsConfig.jobIdVariable.trimmed().isEmpty()) {
@@ -674,15 +735,6 @@ namespace backend
             }
         }
 
-        QMetaObject::invokeMethod(this, [this, adsGeneration, requestedJobId]() {
-            if (adsGeneration != m_adsGeneration) {
-                return;
-            }
-
-            m_adsPollInFlight = false;
-            applyAdsInputs(requestedJobId);
-        }, Qt::QueuedConnection);
-
-        co_return;
+        co_return requestedJobId;
     }
 }

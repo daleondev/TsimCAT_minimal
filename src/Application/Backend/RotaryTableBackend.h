@@ -54,6 +54,8 @@ namespace backend
 
         void detachSymbolicLink();
         void resetSimulationState();
+        void setSimulationEnabled(bool enabled);
+        auto pollAdsStateOnce() -> QCoro::Task<void>;
         void subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
                                      const QString& variableName,
                                      ActualPositionType variableType);
@@ -71,6 +73,7 @@ namespace backend
 
       private:
         void launchTask(QCoro::Task<void>&& task);
+        void logState(const char* context) const;
         void publishAngleDegrees(double value);
         void setAngleDegrees(double value);
         void updateSpawnState(double rawAngle);
@@ -89,6 +92,8 @@ namespace backend
         bool m_part180Present{ false };
         bool m_sensor0Active{ false };
         bool m_sensor180Active{ false };
+        bool m_simulationEnabled{ true };
+        QString m_actualPositionVariableName;
         QString m_sensor0VariableName;
         QString m_sensor180VariableName;
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };

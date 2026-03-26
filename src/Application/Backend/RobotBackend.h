@@ -95,6 +95,8 @@ namespace backend
 
         void configureAds(core::link::ISymbolicLink* symbolicLink, AdsConfig config);
         void resetSimulationState();
+        void setSimulationEnabled(bool enabled);
+        auto pollAdsStateOnce() -> QCoro::Task<void>;
         void setConveyorBackend(ConveyorBackend* conveyorBackend);
         void setRotaryTableBackend(RotaryTableBackend* rotaryTableBackend);
         void detachSymbolicLink();
@@ -139,6 +141,7 @@ namespace backend
         auto flushAdsStatusAsync() -> QCoro::Task<void>;
         auto writeStatusAsync(int activeJobId, bool gripperSensorActive, size_t adsGeneration)
           -> QCoro::Task<void>;
+        auto readRequestedJobIdAsync() -> QCoro::Task<int>;
         auto pollAdsInputsAsync(size_t adsGeneration) -> QCoro::Task<void>;
 
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };
@@ -169,6 +172,7 @@ namespace backend
         bool m_gripperGripped{ false };
         bool m_carriedPartVisible{ false };
         bool m_gripperSensorBlocked{ false };
+        bool m_simulationEnabled{ true };
         bool m_inMotion{ false };
         bool m_atHome{ true };
     };

@@ -71,6 +71,12 @@
                 "name": "Robot (EL6631).krc4_Inputs.krc4_SubmoduleData_1[1]",
                 "type": "bool"
             }
+        },
+        "simulation": {
+            "reset": {
+                "name": "8 Dig Out (EL2008).Channel 4",
+                "type": "bool"
+            }
         }
     }
 }

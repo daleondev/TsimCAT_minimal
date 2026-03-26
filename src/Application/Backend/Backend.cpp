@@ -10,8 +10,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaObject>
 
 #include <algorithm>
+#include <iostream>
 
 namespace
 {
@@ -101,6 +103,7 @@ namespace backend
         VariableConfig robotJobId;
         VariableConfig robotActualJobId;
         VariableConfig robotGripperSensor;
+        VariableConfig simulationReset;
     };
 
     Backend::Backend(QObject* parent)
@@ -109,12 +112,17 @@ namespace backend
       , m_conveyor(new ConveyorBackend(this))
       , m_robot(new RobotBackend(this))
       , m_rotaryTable(new RotaryTableBackend(this))
+      , m_simulationResetPollTimer(new QTimer(this))
     {
+        m_simulationResetPollTimer->setInterval(100);
+        connect(m_simulationResetPollTimer, &QTimer::timeout, this, &Backend::startSimulationResetPoll);
         launchTask(initializeSharedAdsLinkAsync());
     }
 
     Backend::~Backend()
     {
+        resetSimulationResetControl();
+
         if (m_rotaryTable) {
             m_rotaryTable->detachSymbolicLink();
         }
@@ -163,6 +171,154 @@ namespace backend
         QCoro::connect(std::move(guarded), this, []() {});
     }
 
+    void Backend::setSimulationEnabled(bool enabled)
+    {
+        if (m_robot) {
+            m_robot->setSimulationEnabled(enabled);
+        }
+
+        if (m_conveyor) {
+            m_conveyor->setSimulationEnabled(enabled);
+        }
+
+        if (m_rotaryTable) {
+            m_rotaryTable->setSimulationEnabled(enabled);
+        }
+    }
+
+    void Backend::resetSimulationResetControl()
+    {
+        if (m_simulationResetPollTimer) {
+            m_simulationResetPollTimer->stop();
+        }
+
+        m_simulationResetVariableName.clear();
+        m_simulationResetPollInFlight = false;
+        ++m_simulationResetGeneration;
+        m_lastSimulationResetCommand = false;
+    }
+
+    void Backend::startSimulationResetPoll()
+    {
+        if (!m_sharedAdsSymbolicLink || m_simulationResetPollInFlight ||
+            m_simulationResetVariableName.trimmed().isEmpty()) {
+            return;
+        }
+
+        m_simulationResetPollInFlight = true;
+        launchTask(pollSimulationResetAsync(m_simulationResetVariableName, m_simulationResetGeneration));
+    }
+
+    void Backend::applySimulationResetCommand(bool resetCommand)
+    {
+        std::cout << "[reset-trace] reset_command current=" << resetCommand
+                  << " previous=" << m_lastSimulationResetCommand;
+        if (m_rotaryTable) {
+            std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                      << " sensor0=" << m_rotaryTable->sensor0Active()
+                      << " sensor180=" << m_rotaryTable->sensor180Active()
+                      << " part0=" << m_rotaryTable->part0Present()
+                      << " part180=" << m_rotaryTable->part180Present();
+        }
+        std::cout << std::endl;
+
+        if (resetCommand && !m_lastSimulationResetCommand) {
+            resetSimulationState();
+            setSimulationEnabled(false);
+        }
+        else if (!resetCommand && m_lastSimulationResetCommand) {
+            launchTask(refreshPlcSignalsOnceAsync(true));
+        }
+
+        m_lastSimulationResetCommand = resetCommand;
+    }
+
+    auto Backend::refreshPlcSignalsOnceAsync(bool enableSimulationBeforeRobotPoll) -> QCoro::Task<void>
+    {
+        std::cout << "[reset-trace] refresh_begin enableBeforeRobot=" << enableSimulationBeforeRobotPoll;
+        if (m_rotaryTable) {
+            std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                      << " sensor0=" << m_rotaryTable->sensor0Active()
+                      << " sensor180=" << m_rotaryTable->sensor180Active()
+                      << " part0=" << m_rotaryTable->part0Present()
+                      << " part180=" << m_rotaryTable->part180Present();
+        }
+        std::cout << std::endl;
+
+        if (m_conveyor) {
+            co_await m_conveyor->pollAdsStateOnce();
+        }
+
+        if (m_rotaryTable) {
+            co_await m_rotaryTable->pollAdsStateOnce();
+        }
+
+        std::cout << "[reset-trace] refresh_after_rotary";
+        if (m_rotaryTable) {
+            std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                      << " sensor0=" << m_rotaryTable->sensor0Active()
+                      << " sensor180=" << m_rotaryTable->sensor180Active()
+                      << " part0=" << m_rotaryTable->part0Present()
+                      << " part180=" << m_rotaryTable->part180Present();
+        }
+        std::cout << std::endl;
+
+        if (enableSimulationBeforeRobotPoll) {
+            setSimulationEnabled(true);
+            std::cout << "[reset-trace] refresh_after_enable";
+            if (m_rotaryTable) {
+                std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                          << " sensor0=" << m_rotaryTable->sensor0Active()
+                          << " sensor180=" << m_rotaryTable->sensor180Active()
+                          << " part0=" << m_rotaryTable->part0Present()
+                          << " part180=" << m_rotaryTable->part180Present();
+            }
+            std::cout << std::endl;
+        }
+
+        if (m_robot) {
+            co_await m_robot->pollAdsStateOnce();
+        }
+
+        std::cout << "[reset-trace] refresh_complete";
+        if (m_rotaryTable) {
+            std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                      << " sensor0=" << m_rotaryTable->sensor0Active()
+                      << " sensor180=" << m_rotaryTable->sensor180Active()
+                      << " part0=" << m_rotaryTable->part0Present()
+                      << " part180=" << m_rotaryTable->part180Present();
+        }
+        std::cout << std::endl;
+
+        co_return;
+    }
+
+    auto Backend::pollSimulationResetAsync(QString variableName, size_t generation) -> QCoro::Task<void>
+    {
+        if (!m_sharedAdsSymbolicLink || variableName.trimmed().isEmpty()) {
+            co_return;
+        }
+
+        auto currentValue =
+          co_await toQCoroTask(m_sharedAdsSymbolicLink->read<bool>(variableName.toStdString()));
+
+        QMetaObject::invokeMethod(this, [this, generation, currentValue = std::move(currentValue)]() mutable {
+            if (generation != m_simulationResetGeneration) {
+                return;
+            }
+
+            m_simulationResetPollInFlight = false;
+
+            if (!currentValue) {
+                return;
+            }
+
+            applySimulationResetCommand(currentValue.value());
+        }, Qt::QueuedConnection);
+
+        co_return;
+    }
+
     auto Backend::configFilePath() const -> QString
     {
         const QDir appDir(QCoreApplication::applicationDirPath());
@@ -204,6 +360,7 @@ namespace backend
         const auto rotaryTable = adsVariables.value(QStringLiteral("rotaryTable")).toObject();
         const auto conveyor = adsVariables.value(QStringLiteral("conveyor")).toObject();
         const auto robot = adsVariables.value(QStringLiteral("robot")).toObject();
+        const auto simulation = adsVariables.value(QStringLiteral("simulation")).toObject();
 
         config.rotaryActualPosition =
           readVariableConfig(rotaryTable, QStringLiteral("actualPosition"), QStringLiteral("double"));
@@ -231,6 +388,8 @@ namespace backend
           readVariableConfig(robot, QStringLiteral("actualJobId"), QStringLiteral("int32"));
         config.robotGripperSensor =
           readVariableConfig(robot, QStringLiteral("gripperSensor"), QStringLiteral("bool"));
+        config.simulationReset =
+          readVariableConfig(simulation, QStringLiteral("reset"), QStringLiteral("bool"));
 
         return config;
     }
@@ -249,6 +408,8 @@ namespace backend
             m_robot->detachSymbolicLink();
         }
 
+        resetSimulationResetControl();
+
         if (m_sharedAdsLink) {
             if (auto* client = m_sharedAdsLink->asClient()) {
                 (void)co_await toQCoroTask(client->disconnect());
@@ -264,7 +425,7 @@ namespace backend
           config.conveyorDamperMoveUp.isConfigured() || config.conveyorDamperMoveDown.isConfigured() ||
           config.conveyorDamperUpSensor.isConfigured() || config.conveyorDamperDownSensor.isConfigured() ||
           config.robotJobId.isConfigured() || config.robotActualJobId.isConfigured() ||
-          config.robotGripperSensor.isConfigured() ||
+          config.robotGripperSensor.isConfigured() || config.simulationReset.isConfigured() ||
           std::ranges::any_of(config.conveyorSensors,
                               [](const auto& variable) { return variable.isConfigured(); });
         if (!hasConfiguredVariables) {
@@ -296,6 +457,10 @@ namespace backend
         }
 
         if (config.robotGripperSensor.isConfigured() && !config.robotGripperSensor.isBoolean()) {
+            co_return;
+        }
+
+        if (config.simulationReset.isConfigured() && !config.simulationReset.isBoolean()) {
             co_return;
         }
 
@@ -361,6 +526,17 @@ namespace backend
         if (config.conveyorRun.isConfigured()) {
             m_conveyor->subscribeRun(m_sharedAdsSymbolicLink, config.conveyorRun.name);
         }
+
+        if (config.simulationReset.isConfigured()) {
+            m_simulationResetVariableName = config.simulationReset.name;
+            if (m_simulationResetPollTimer) {
+                m_simulationResetPollTimer->start();
+            }
+            startSimulationResetPoll();
+        }
+
+        setSimulationEnabled(true);
+        co_await refreshPlcSignalsOnceAsync(false);
 
         co_return;
     }

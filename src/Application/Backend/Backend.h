@@ -9,6 +9,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QtQml/qqmlregistration.h>
 
 #include <array>
@@ -49,9 +50,15 @@ namespace backend
         struct SharedAdsConfig;
 
         void launchTask(QCoro::Task<void>&& task);
+        void setSimulationEnabled(bool enabled);
+        void resetSimulationResetControl();
+        void startSimulationResetPoll();
+        void applySimulationResetCommand(bool resetCommand);
+        auto refreshPlcSignalsOnceAsync(bool enableSimulationBeforeRobotPoll) -> QCoro::Task<void>;
         auto initializeSharedAdsLinkAsync() -> QCoro::Task<void>;
         auto configFilePath() const -> QString;
         auto loadSharedAdsConfig() const -> SharedAdsConfig;
+        auto pollSimulationResetAsync(QString variableName, size_t generation) -> QCoro::Task<void>;
 
         AdsConfigBackend* m_adsConfig{ nullptr };
         ConveyorBackend* m_conveyor{ nullptr };
@@ -59,5 +66,10 @@ namespace backend
         RotaryTableBackend* m_rotaryTable{ nullptr };
         std::unique_ptr<core::link::ILink> m_sharedAdsLink;
         core::link::ISymbolicLink* m_sharedAdsSymbolicLink{ nullptr };
+        QTimer* m_simulationResetPollTimer{ nullptr };
+        QString m_simulationResetVariableName;
+        bool m_simulationResetPollInFlight{ false };
+        size_t m_simulationResetGeneration{ 0 };
+        bool m_lastSimulationResetCommand{ false };
     };
 }

@@ -56,6 +56,8 @@ namespace backend
 
         void detachSymbolicLink();
         void resetSimulationState();
+        void setSimulationEnabled(bool enabled);
+        auto pollAdsStateOnce() -> QCoro::Task<void>;
         void subscribeRun(core::link::ISymbolicLink* symbolicLink, const QString& variableName);
         void configureSensorVariables(core::link::ISymbolicLink* symbolicLink,
                                       const std::array<QString, 4>& variableNames);
@@ -111,9 +113,16 @@ namespace backend
         bool m_damperUpSensorActive{ false };
         bool m_damperDownSensorActive{ true };
         double m_damperPosition{ 0.0 };
+        bool m_simulationEnabled{ true };
+        bool m_requestedRunning{ false };
+        bool m_requestedDamperMoveUpCommand{ false };
+        bool m_requestedDamperMoveDownCommand{ false };
         bool m_running{ false };
         std::array<bool, 4> m_sensors{ false, false, false, false };
+        QString m_runVariableName;
         std::array<QString, 4> m_sensorVariableNames;
+        QString m_damperMoveUpVariableName;
+        QString m_damperMoveDownVariableName;
         QString m_damperUpSensorVariableName;
         QString m_damperDownSensorVariableName;
         core::link::ISymbolicLink* m_symbolicLink{ nullptr };

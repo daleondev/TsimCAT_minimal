@@ -94,16 +94,81 @@ namespace backend
     void ConveyorBackend::resetSimulationState()
     {
         setRunning(false);
+        m_requestedRunning = false;
         const auto hadParts = !m_partPositions.empty();
         const auto previousLeadPosition = partPosition();
         m_partPositions.clear();
         syncPartStateSignals(hadParts, previousLeadPosition);
         setDamperMoveUpCommand(false);
         setDamperMoveDownCommand(false);
+        m_requestedDamperMoveUpCommand = false;
+        m_requestedDamperMoveDownCommand = false;
         setDamperPositionInternal(0.0);
         updateSensorsFromPart();
         publishSensorOutputs();
         publishDamperSensorOutputs();
+    }
+
+    void ConveyorBackend::setSimulationEnabled(bool enabled)
+    {
+        if (m_simulationEnabled == enabled) {
+            return;
+        }
+
+        m_simulationEnabled = enabled;
+
+        if (!m_simulationEnabled) {
+            setRunning(false);
+            setDamperMoveUpCommand(false);
+            setDamperMoveDownCommand(false);
+            return;
+        }
+
+        setRunning(m_requestedRunning);
+        setDamperMoveUpCommand(m_requestedDamperMoveUpCommand);
+        setDamperMoveDownCommand(m_requestedDamperMoveDownCommand);
+    }
+
+    auto ConveyorBackend::pollAdsStateOnce() -> QCoro::Task<void>
+    {
+        if (!m_symbolicLink) {
+            co_return;
+        }
+
+        if (!m_runVariableName.trimmed().isEmpty()) {
+            const auto result =
+              co_await toQCoroTask(m_symbolicLink->read<bool>(m_runVariableName.toStdString()));
+            if (result) {
+                m_requestedRunning = result.value();
+                if (m_simulationEnabled) {
+                    setRunning(m_requestedRunning);
+                }
+            }
+        }
+
+        if (!m_damperMoveUpVariableName.trimmed().isEmpty()) {
+            const auto result =
+              co_await toQCoroTask(m_symbolicLink->read<bool>(m_damperMoveUpVariableName.toStdString()));
+            if (result) {
+                m_requestedDamperMoveUpCommand = result.value();
+                if (m_simulationEnabled) {
+                    setDamperMoveUpCommand(m_requestedDamperMoveUpCommand);
+                }
+            }
+        }
+
+        if (!m_damperMoveDownVariableName.trimmed().isEmpty()) {
+            const auto result =
+              co_await toQCoroTask(m_symbolicLink->read<bool>(m_damperMoveDownVariableName.toStdString()));
+            if (result) {
+                m_requestedDamperMoveDownCommand = result.value();
+                if (m_simulationEnabled) {
+                    setDamperMoveDownCommand(m_requestedDamperMoveDownCommand);
+                }
+            }
+        }
+
+        co_return;
     }
 
     void ConveyorBackend::subscribeRun(core::link::ISymbolicLink* symbolicLink, const QString& variableName)
@@ -111,6 +176,8 @@ namespace backend
         if (symbolicLink) {
             m_symbolicLink = symbolicLink;
         }
+
+        m_runVariableName = variableName;
 
         unsubscribe(m_runSubscription);
 
@@ -146,6 +213,8 @@ namespace backend
         unsubscribe(m_damperMoveUpSubscription);
         unsubscribe(m_damperMoveDownSubscription);
 
+        m_damperMoveUpVariableName = moveUpVariable;
+        m_damperMoveDownVariableName = moveDownVariable;
         m_damperUpSensorVariableName = upSensorVariable;
         m_damperDownSensorVariableName = downSensorVariable;
         updateDamperSensors();
@@ -166,6 +235,10 @@ namespace backend
 
     auto ConveyorBackend::tryPlacePartFromRobot() -> bool
     {
+        if (!m_simulationEnabled) {
+            return false;
+        }
+
         const auto entryBlocked = std::ranges::any_of(m_partPositions, [](double position) {
             return std::abs(position - kPlacedPartStartPosition) < kPlaceEntryClearance;
         });
@@ -184,6 +257,10 @@ namespace backend
 
     auto ConveyorBackend::tryTakePartAtExit() -> bool
     {
+        if (!m_simulationEnabled) {
+            return false;
+        }
+
         if (m_partPositions.empty()) {
             return false;
         }
@@ -223,6 +300,10 @@ namespace backend
     {
         const auto elapsedMs = static_cast<double>(m_stepClock.restart());
         const auto deltaSeconds = std::max(0.001, elapsedMs / 1000.0);
+
+        if (!m_simulationEnabled) {
+            return;
+        }
 
         if (m_running && !m_partPositions.empty()) {
             const auto hadParts = true;
@@ -496,7 +577,10 @@ namespace backend
                 break;
             }
 
-            setRunning(nextValue.value());
+            m_requestedRunning = nextValue.value();
+            if (m_simulationEnabled) {
+                setRunning(m_requestedRunning);
+            }
         }
 
         co_return;
@@ -510,7 +594,10 @@ namespace backend
                 break;
             }
 
-            setDamperMoveUpCommand(nextValue.value());
+            m_requestedDamperMoveUpCommand = nextValue.value();
+            if (m_simulationEnabled) {
+                setDamperMoveUpCommand(m_requestedDamperMoveUpCommand);
+            }
         }
 
         co_return;
@@ -524,7 +611,10 @@ namespace backend
                 break;
             }
 
-            setDamperMoveDownCommand(nextValue.value());
+            m_requestedDamperMoveDownCommand = nextValue.value();
+            if (m_simulationEnabled) {
+                setDamperMoveDownCommand(m_requestedDamperMoveDownCommand);
+            }
         }
 
         co_return;

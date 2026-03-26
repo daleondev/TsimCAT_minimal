@@ -58,6 +58,20 @@ namespace
         return backend::RotaryTableBackend::SpawnSide::None;
     }
 
+    auto spawnSideName(backend::RotaryTableBackend::SpawnSide side) -> const char*
+    {
+        switch (side) {
+            case backend::RotaryTableBackend::SpawnSide::Zero:
+                return "Zero";
+            case backend::RotaryTableBackend::SpawnSide::OneEighty:
+                return "OneEighty";
+            case backend::RotaryTableBackend::SpawnSide::None:
+                return "None";
+        }
+
+        return "Unknown";
+    }
+
     template<typename T>
     auto toQCoroTask(core::coro::Task<T>&& task) -> QCoro::Task<T>
     {
@@ -101,6 +115,7 @@ namespace backend
 
         m_actualPositionFloatSubscription = {};
         m_actualPositionDoubleSubscription = {};
+        m_actualPositionVariableName.clear();
         m_symbolicLink = nullptr;
     }
 
@@ -111,6 +126,69 @@ namespace backend
         setPart180Present(false);
     }
 
+    void RotaryTableBackend::setSimulationEnabled(bool enabled)
+    {
+        if (m_simulationEnabled == enabled) {
+            return;
+        }
+
+        m_simulationEnabled = enabled;
+        logState(m_simulationEnabled ? "rotary_enable_before_restart" : "rotary_disable");
+
+        if (!m_simulationEnabled) {
+            resetPendingSpawn();
+            logState("rotary_disable_after_resetPendingSpawn");
+            return;
+        }
+
+        updateSpawnState(m_angleDegrees);
+        logState("rotary_enable_after_restart");
+    }
+
+    auto RotaryTableBackend::pollAdsStateOnce() -> QCoro::Task<void>
+    {
+        if (!m_symbolicLink || m_actualPositionVariableName.trimmed().isEmpty()) {
+            co_return;
+        }
+
+        const auto applyAngleSynchronously = [this](double value) {
+            if (QThread::currentThread() == thread()) {
+                setAngleDegrees(value);
+                return;
+            }
+
+            QMetaObject::invokeMethod(
+              this, [this, value]() { setAngleDegrees(value); }, Qt::BlockingQueuedConnection);
+        };
+
+        switch (m_actualPositionType) {
+            case ActualPositionType::Float: {
+                const auto result = co_await toQCoroTask(
+                  m_symbolicLink->read<float>(m_actualPositionVariableName.toStdString()));
+                if (result) {
+                    std::cout << "[reset-trace] rotary_poll value=" << static_cast<double>(result.value())
+                              << " storedAngleBefore=" << m_angleDegrees << std::endl;
+                    applyAngleSynchronously(static_cast<double>(result.value()));
+                    logState("rotary_poll_after_apply");
+                }
+                break;
+            }
+            case ActualPositionType::Double: {
+                const auto result = co_await toQCoroTask(
+                  m_symbolicLink->read<double>(m_actualPositionVariableName.toStdString()));
+                if (result) {
+                    std::cout << "[reset-trace] rotary_poll value=" << result.value()
+                              << " storedAngleBefore=" << m_angleDegrees << std::endl;
+                    applyAngleSynchronously(result.value());
+                    logState("rotary_poll_after_apply");
+                }
+                break;
+            }
+        }
+
+        co_return;
+    }
+
     void RotaryTableBackend::subscribeActualPosition(core::link::ISymbolicLink* symbolicLink,
                                                      const QString& variableName,
                                                      ActualPositionType variableType)
@@ -118,6 +196,7 @@ namespace backend
         detachSymbolicLink();
         m_symbolicLink = symbolicLink;
         m_actualPositionType = variableType;
+        m_actualPositionVariableName = variableName;
 
         if (!m_symbolicLink || variableName.trimmed().isEmpty()) {
             return;
@@ -148,6 +227,10 @@ namespace backend
 
     auto RotaryTableBackend::tryTakePartForRobotPick() -> bool
     {
+        if (!m_simulationEnabled) {
+            return false;
+        }
+
         const auto side = detectSpawnSide(m_angleDegrees);
 
         if (side == SpawnSide::Zero && m_part180Present) {
@@ -181,7 +264,12 @@ namespace backend
 
     void RotaryTableBackend::setAngleDegrees(double value)
     {
-        updateSpawnState(value);
+        if (m_simulationEnabled) {
+            updateSpawnState(value);
+        }
+        else {
+            resetPendingSpawn();
+        }
 
         const auto angleChanged = !qFuzzyCompare(m_angleDegrees, value);
 
@@ -228,6 +316,15 @@ namespace backend
         }
 
         m_pendingSpawnSide = SpawnSide::None;
+    }
+
+    void RotaryTableBackend::logState(const char* context) const
+    {
+        std::cout << "[reset-trace] " << context << " angle=" << m_angleDegrees << " part0=" << m_part0Present
+                  << " part180=" << m_part180Present << " sensor0=" << m_sensor0Active
+                  << " sensor180=" << m_sensor180Active << " simulationEnabled=" << m_simulationEnabled
+                  << " pendingSpawn=" << spawnSideName(m_pendingSpawnSide)
+                  << " pendingReference=" << m_pendingSpawnReferenceAngle << std::endl;
     }
 
     void RotaryTableBackend::handleSpawnTimer()

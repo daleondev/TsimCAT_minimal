@@ -55,7 +55,7 @@ namespace backend
         void startSimulationResetPoll();
         void applySimulationResetCommand(bool resetCommand);
         auto refreshPlcSignalsOnceAsync(bool enableSimulationBeforeRobotPoll) -> QCoro::Task<void>;
-        auto initializeSharedAdsLinkAsync() -> QCoro::Task<void>;
+        auto initializeSharedAdsLinkAsync(bool preserveResetState = false) -> QCoro::Task<void>;
         auto configFilePath() const -> QString;
         auto loadSharedAdsConfig() const -> SharedAdsConfig;
         auto pollSimulationResetAsync(QString variableName, size_t generation) -> QCoro::Task<void>;

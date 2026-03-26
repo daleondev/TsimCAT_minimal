@@ -225,6 +225,8 @@ namespace backend
         if (resetCommand && !m_lastSimulationResetCommand) {
             resetSimulationState();
             setSimulationEnabled(false);
+            std::cout << "[reset-trace] reset_command reconnect_ads_on_rising_edge" << std::endl;
+            launchTask(initializeSharedAdsLinkAsync(true));
         }
         else if (!resetCommand && m_lastSimulationResetCommand) {
             launchTask(refreshPlcSignalsOnceAsync(true));
@@ -394,9 +396,10 @@ namespace backend
         return config;
     }
 
-    auto Backend::initializeSharedAdsLinkAsync() -> QCoro::Task<void>
+    auto Backend::initializeSharedAdsLinkAsync(bool preserveResetState) -> QCoro::Task<void>
     {
         const auto config = loadSharedAdsConfig();
+        auto resetSignalActive = preserveResetState;
 
         if (m_rotaryTable) {
             m_rotaryTable->detachSymbolicLink();
@@ -529,14 +532,37 @@ namespace backend
 
         if (config.simulationReset.isConfigured()) {
             m_simulationResetVariableName = config.simulationReset.name;
+            const auto resetSignalResult =
+              co_await toQCoroTask(m_sharedAdsSymbolicLink->read<bool>(config.simulationReset.name.toStdString()));
+            if (resetSignalResult) {
+                resetSignalActive = resetSignalResult.value();
+            }
+
+            m_lastSimulationResetCommand = resetSignalActive;
+
             if (m_simulationResetPollTimer) {
                 m_simulationResetPollTimer->start();
             }
             startSimulationResetPoll();
         }
 
-        setSimulationEnabled(true);
+        setSimulationEnabled(!resetSignalActive);
         co_await refreshPlcSignalsOnceAsync(false);
+
+        if (!resetSignalActive) {
+            setSimulationEnabled(true);
+        }
+
+        std::cout << "[reset-trace] initialize_shared_ads complete preserveResetState="
+                  << preserveResetState << " resetSignalActive=" << resetSignalActive;
+        if (m_rotaryTable) {
+            std::cout << " rotaryAngle=" << m_rotaryTable->angleDegrees()
+                      << " sensor0=" << m_rotaryTable->sensor0Active()
+                      << " sensor180=" << m_rotaryTable->sensor180Active()
+                      << " part0=" << m_rotaryTable->part0Present()
+                      << " part180=" << m_rotaryTable->part180Present();
+        }
+        std::cout << std::endl;
 
         co_return;
     }
